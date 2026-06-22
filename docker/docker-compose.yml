@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sherlock_postgres
+    environment:
+      POSTGRES_USER: sherlock
+      POSTGRES_PASSWORD: sherlock
+      POSTGRES_DB: sherlock
+    ports:
+      - "5432:5432"
+    volumes:
+      - sherlock_pg_data:/var/lib/postgresql/data
+
+  neo4j:
+    image: neo4j:5-community
+    container_name: sherlock_neo4j
+    environment:
+      NEO4J_AUTH: neo4j/sherlock123
+      NEO4J_PLUGINS: '["graph-data-science"]'
+    ports:
+      - "7474:7474"   # browser UI
+      - "7687:7687"   # bolt
+    volumes:
+      - sherlock_neo4j_data:/data
+
+volumes:
+  sherlock_pg_data:
+  sherlock_neo4j_data:
