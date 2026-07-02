@@ -1,0 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+:root {
+  --bg-base:#0B1220;--bg-panel:#111827;--bg-panel-hover:#1a2233;--bg-input:#0d1829;--bg-subtle:#0f1a2e;
+  --border:#1F2937;--border-subtle:#161f2e;--border-strong:#2d3f57;--border-focus:#38BDF8;
+  --text-primary:#F9FAFB;--text-secondary:#94A3B8;--text-muted:#4B5563;--text-accent:#38BDF8;
+  --text-success:#10B981;--text-warning:#F59E0B;--text-danger:#EF4444;
+  --accent:#38BDF8;--accent-dim:rgba(56,189,248,0.12);--success:#10B981;--success-dim:rgba(16,185,129,0.12);
+  --warning:#F59E0B;--warning-dim:rgba(245,158,11,0.12);--danger:#EF4444;--danger-dim:rgba(239,68,68,0.12);
+  --node-person:#38BDF8;--node-crime:#EF4444;--node-location:#10B981;--node-account:#F59E0B;
+  --node-phone:#8B5CF6;--node-vehicle:#6B7280;--node-fir:#EC4899;--node-transaction:#F97316;
+  --font-sans:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+  --font-mono:'JetBrains Mono','Fira Code',monospace;
+  --text-xs:11px;--text-sm:13px;--text-base:15px;--text-lg:18px;--text-xl:24px;--text-2xl:32px;--text-hero:52px;
+  --leading-xs:16px;--leading-sm:20px;--leading-base:24px;--leading-lg:28px;--leading-xl:32px;--leading-2xl:40px;--leading-hero:60px;
+  --weight-normal:400;--weight-medium:500;--weight-semibold:600;--weight-bold:700;
+  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-8:32px;--space-10:40px;--space-12:48px;
+  --panel-left:280px;--panel-right:320px;--header-h:52px;--console-h:72px;
+  --radius-sm:4px;--radius-md:8px;--radius-lg:12px;
+  --shadow-card:0 4px 12px rgba(0,0,0,0.4);
+  --dur-micro:80ms;--dur-fast:150ms;--dur-base:220ms;--dur-slow:380ms;--dur-enter:520ms;
+  --ease:cubic-bezier(0.16,1,0.3,1);--ease-out:cubic-bezier(0,0,0.2,1);--ease-std:cubic-bezier(0.4,0,0.2,1);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100%;background:var(--bg-base);color:var(--text-primary);font-family:var(--font-sans);font-size:var(--text-base);line-height:var(--leading-base);-webkit-font-smoothing:antialiased;overflow:hidden;}
+#root{width:100%;height:100%;}
+::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:2px;}
+:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px;border-radius:var(--radius-sm);}
+.mono{font-family:var(--font-mono);}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms!important;transition-duration:0.01ms!important;}}
