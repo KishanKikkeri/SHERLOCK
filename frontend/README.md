@@ -15,7 +15,7 @@ React 18 + TypeScript (strict) + Vite + D3 (graph only, lazy-loaded) + CSS Modul
 ## Run it
 
 ```bash
-cd frontend-v2
+cd frontend
 npm install
 npm run dev          # http://localhost:5173, proxies /ws and /api to localhost:8000
 ```
