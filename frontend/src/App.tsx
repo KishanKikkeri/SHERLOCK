@@ -8,8 +8,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useInvestigation }   from './hooks/useInvestigation';
 import { LandingScreen }      from './components/landing/LandingScreen';
 import { WorkspaceLayout }    from './components/workspace/WorkspaceLayout';
+import { InvestigationBoard } from './components/board/InvestigationBoard';
 
-type Mode = 'landing' | 'workspace';
+type Mode = 'landing' | 'workspace' | 'board';
 
 export function App() {
   const [mode, setMode]         = useState<Mode>('landing');
@@ -63,12 +64,20 @@ export function App() {
         transition: 'opacity 200ms ease',
       }}
     >
-      {mode === 'landing' ? (
+      {mode === 'landing' && (
         <LandingScreen onSubmit={handleSubmit} />
-      ) : (
+      )}
+      {mode === 'workspace' && (
         <WorkspaceLayout
           state={investigationState}
           actions={{ ...investigationActions, reset: handleReset }}
+          onOpenBoard={() => setMode('board')}
+        />
+      )}
+      {mode === 'board' && (
+        <InvestigationBoard
+          findings={investigationState.allFindings}
+          onExit={() => setMode('workspace')}
         />
       )}
     </main>

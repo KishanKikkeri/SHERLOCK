@@ -10,6 +10,7 @@ interface Props {
   query: string;
   metrics: Metrics | null;
   onReset: () => void;
+  onOpenBoard: () => void;
 }
 
 function MetricPill({ value, label }: { value: number | undefined; label: string }) {
@@ -21,7 +22,7 @@ function MetricPill({ value, label }: { value: number | undefined; label: string
   );
 }
 
-export function Header({ query, metrics, onReset }: Props) {
+export function Header({ query, metrics, onReset, onOpenBoard }: Props) {
   return (
     <header className={styles.root}>
       {/* Left: logo + query */}
@@ -48,23 +49,35 @@ export function Header({ query, metrics, onReset }: Props) {
         </p>
       </div>
 
-      {/* Right: metrics */}
-      {metrics && (
-        <div className={styles.metrics} role="complementary" aria-label="Dataset metrics">
-          <MetricPill value={metrics.persons} label="persons" />
-          <div className={styles.metricDivider} aria-hidden />
-          <MetricPill value={metrics.crimes} label="crimes" />
-          <div className={styles.metricDivider} aria-hidden />
-          <MetricPill value={metrics.relationships} label="graph edges" />
-          <div className={styles.metricDivider} aria-hidden />
-          <MetricPill value={metrics.repeat_offenders} label="repeat offenders" />
+      {/* Right: metrics + board nav */}
+      <div className={styles.right}>
+        <button className={styles.boardBtn} onClick={onOpenBoard} title="Open Investigation Board">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+            <rect x="3" y="3" width="8" height="8" rx="1.5" />
+            <rect x="13" y="3" width="8" height="5" rx="1.5" />
+            <rect x="13" y="10" width="8" height="11" rx="1.5" />
+            <rect x="3" y="13" width="8" height="8" rx="1.5" />
+          </svg>
+          Board
+        </button>
 
-          {/* Live status indicator */}
-          <div className={styles.statusWrap} aria-label="System operational">
-            <span className={styles.statusDot} aria-hidden />
+        {metrics && (
+          <div className={styles.metrics} role="complementary" aria-label="Dataset metrics">
+            <MetricPill value={metrics.persons} label="persons" />
+            <div className={styles.metricDivider} aria-hidden />
+            <MetricPill value={metrics.crimes} label="crimes" />
+            <div className={styles.metricDivider} aria-hidden />
+            <MetricPill value={metrics.relationships} label="graph edges" />
+            <div className={styles.metricDivider} aria-hidden />
+            <MetricPill value={metrics.repeat_offenders} label="repeat offenders" />
+
+            {/* Live status indicator */}
+            <div className={styles.statusWrap} aria-label="System operational">
+              <span className={styles.statusDot} aria-hidden />
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </header>
   );
 }

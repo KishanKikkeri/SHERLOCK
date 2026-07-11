@@ -1,0 +1,107 @@
+.root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-base);
+}
+
+.canvas {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-base);
+  touch-action: none;
+}
+
+.layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+}
+
+.dotgrid {
+  position: absolute;
+  left: -4000px;
+  top: -4000px;
+  width: 8000px;
+  height: 8000px;
+  background-image: radial-gradient(var(--border-strong) 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.linkSvg {
+  position: absolute;
+  left: -4000px;
+  top: -4000px;
+  width: 8000px;
+  height: 8000px;
+  overflow: visible;
+}
+
+.linkDeleteBtn {
+  width: 100%;
+  height: 100%;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-danger);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.linkDeleteBtn:hover { background: var(--danger-dim); }
+
+.emptyHint {
+  position: absolute;
+  left: 420px;
+  top: 260px;
+  width: 320px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.emptyHintSub { font-size: var(--text-sm); margin-top: var(--space-2); }
+
+.linkHint {
+  position: absolute;
+  bottom: var(--space-6);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-focus);
+  color: var(--text-primary);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow-card);
+  z-index: 5;
+}
+
+/* ── Presentation mode bar ────────────────────────────────────── */
+.presentBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  z-index: 5;
+}
+.presentLabel { font-size: var(--text-sm); color: var(--text-secondary); font-family: var(--font-mono); }
+.presentControls { display: flex; gap: var(--space-2); align-items: center; }
+.presentControls button {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+.presentControls button:disabled { opacity: 0.3; cursor: default; }
+.presentExit { color: var(--text-danger) !important; }

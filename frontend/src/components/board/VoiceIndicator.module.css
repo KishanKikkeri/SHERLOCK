@@ -1,0 +1,99 @@
+.root {
+  position: absolute;
+  bottom: var(--space-6);
+  right: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  z-index: 6;
+}
+
+.controls {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.wakeBtn, .pttBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
+  white-space: nowrap;
+  user-select: none;
+  transition: background var(--dur-fast) var(--ease-std), color var(--dur-fast) var(--ease-std), border-color var(--dur-fast) var(--ease-std);
+}
+.wakeBtn:hover, .pttBtn:hover { color: var(--text-primary); }
+.wakeBtn.active, .pttBtn.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.meterRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-3);
+  box-shadow: var(--shadow-card);
+  max-width: 360px;
+}
+
+.meterTrack {
+  width: 48px;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.meterFill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 60ms linear;
+}
+
+.transcript {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toast {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-focus);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow-card);
+}
+
+.unsupported {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  max-width: 260px;
+  text-align: right;
+}
+
+.error {
+  font-size: var(--text-xs);
+  color: var(--text-danger);
+}

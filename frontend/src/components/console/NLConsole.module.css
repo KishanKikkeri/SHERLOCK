@@ -10,3 +10,7 @@
 .running{background:var(--border);color:var(--text-secondary);}
 .spin{animation:spin 1s linear infinite;transform-origin:center;}
 @keyframes spin{to{transform:rotate(360deg)}}
+.voiceBtn{background:var(--bg-subtle);border:1px solid var(--border);color:var(--text-secondary);border-radius:var(--radius-sm);width:30px;height:30px;font-size:14px;cursor:pointer;transition:background var(--dur-fast) var(--ease),border-color var(--dur-fast) var(--ease);}
+.voiceBtn:hover:not(:disabled){background:var(--bg-panel-hover);}
+.voiceBtn:disabled{opacity:0.35;cursor:not-allowed;}
+.voiceActive{background:var(--accent-dim);border-color:var(--accent);}

@@ -14,12 +14,19 @@ export interface Metrics{persons:number;crimes:number;firs:number;relationships:
 export const PREVENTION_TYPES=new Set(['patrol_strategy','surveillance_action','prevention_recommendation']);
 export const SKIP_TYPES=new Set(['patrol_strategy','surveillance_action','prevention_recommendation','validation_summary']);
 export const AGENT_PIPELINE:{nodeKey:string;name:string}[]=[
-  {nodeKey:'chief_plan',name:'Chief Investigation Officer'},
+  {nodeKey:'chief_plan',name:'Chief Investigation Officer — Planning'},
   {nodeKey:'crime_records',name:'Crime Records Agent'},
   {nodeKey:'network_analysis',name:'Network Analysis Agent'},
+  {nodeKey:'entity_resolution',name:'Entity Resolution Agent'},
+  {nodeKey:'timeline_reconstruction',name:'Timeline Reconstruction Agent'},
   {nodeKey:'financial_agent',name:'Financial Intelligence Agent'},
+  {nodeKey:'similar_case',name:'Similar Case Agent'},
   {nodeKey:'pattern_analysis',name:'Pattern & MO Agent'},
+  {nodeKey:'forecasting_agent',name:'Forecasting Agent'},
   {nodeKey:'prevention_agent',name:'Prevention Intelligence Agent'},
   {nodeKey:'evidence_validation',name:'Evidence Validation Agent'},
-  {nodeKey:'chief_synthesis',name:'Final Report'},
+  {nodeKey:'chief_synthesis',name:'Chief Investigation Officer — Synthesis'},
 ];
+// NOTE: every `name` above must be unique and match backend/api/investigation_stream.py's
+// NODE_LABELS exactly — useInvestigation.ts matches incoming events to a step by this name,
+// not by nodeKey (WSEvent only carries the display name, not the LangGraph node key).

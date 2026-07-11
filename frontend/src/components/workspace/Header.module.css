@@ -64,6 +64,29 @@
   line-height: var(--leading-sm);
 }
 
+/* ── Right cluster (board nav + metrics) ──────────────────────── */
+.right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.boardBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-std), color var(--dur-fast) var(--ease-std), border-color var(--dur-fast) var(--ease-std);
+}
+.boardBtn:hover { background: var(--bg-panel-hover); color: var(--text-primary); border-color: var(--border-strong); }
+
 /* ── Metrics ────────────────────────────────────────────────── */
 .metrics {
   display: flex;
