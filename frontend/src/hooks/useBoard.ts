@@ -1,10 +1,22 @@
 // ─────────────────────────────────────────────────────────────────
-// SHERLOCK — Investigation Board state (Phase 3)
+// SHERLOCK — Investigation Board state (Phase 3, stabilized)
 // Cards + links with undo/redo history, localStorage snapshots,
 // and force-directed auto-layout (lazy-loaded d3).
+//
+// STABILITY NOTE (stress-test fix): every action below is built with
+// `useCallback(..., [])` or depends only on other stable callbacks —
+// none of them depend on `data`/`snapshots` directly. They read the
+// latest values either through React's functional setState form or
+// through `dataRef` (a plain ref mirrored to `data` each render, used
+// only for one-off reads inside a callback body, never for the state
+// update itself). This matters a lot in practice: with unstable action
+// identities, EvidenceCardView's React.memo can't do anything — every
+// card would re-render on every pointer-move of a drag, which is
+// exactly the kind of thing that only becomes visible ("janky
+// dragging") once a board has hundreds of cards on it.
 // ─────────────────────────────────────────────────────────────────
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { AgentFinding } from '../lib/types';
 import {
   type BoardCard, type BoardData, type BoardLink, type BoardSnapshot,
@@ -27,7 +39,7 @@ function loadSnapshots(): BoardSnapshot[] {
   }
 }
 
-function saveSnapshots(snaps: BoardSnapshot[]) {
+function saveSnapshotsToStorage(snaps: BoardSnapshot[]) {
   try { localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snaps)); } catch { /* storage unavailable — ignore */ }
 }
 
@@ -55,13 +67,25 @@ export function useBoard() {
   const future = useRef<BoardData[]>([]);
   const dragOrigin = useRef<BoardData | null>(null);
 
-  const commit = useCallback((next: BoardData, recordHistory = true) => {
-    if (recordHistory) {
-      past.current = [...past.current.slice(-(MAX_HISTORY - 1)), data];
-      future.current = [];
-    }
-    setData(next);
-  }, [data]);
+  // Mirror of the latest `data`, for one-off reads inside stable callbacks
+  // (e.g. "how many sticky notes exist right now, to rotate the colour").
+  // Never used to compute the actual next state — that always goes through
+  // React's functional setData form so it can't race a stale closure.
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
+  // Stable: commits a state update, optionally recording history. Accepts
+  // either a value or an updater function (mirrors React's own setState).
+  const commit = useCallback((updater: BoardData | ((prev: BoardData) => BoardData), recordHistory = true) => {
+    setData(prev => {
+      const next = typeof updater === 'function' ? (updater as (p: BoardData) => BoardData)(prev) : updater;
+      if (recordHistory) {
+        past.current = [...past.current.slice(-(MAX_HISTORY - 1)), prev];
+        future.current = [];
+      }
+      return next;
+    });
+  }, []);
 
   const addCard = useCallback((partial: Partial<BoardCard> & { kind: BoardCard['kind'] }) => {
     const card: BoardCard = {
@@ -70,13 +94,13 @@ export function useBoard() {
       body: '', color: STICKY_COLORS[0],
       ...partial,
     };
-    commit({ ...data, cards: [...data.cards, card] });
-  }, [data, commit]);
+    commit(prev => ({ ...prev, cards: [...prev.cards, card] }));
+  }, [commit]);
 
   const addStickyNote = useCallback(() => {
-    const color = STICKY_COLORS[data.cards.filter(c => c.kind === 'note').length % STICKY_COLORS.length];
+    const color = STICKY_COLORS[dataRef.current.cards.filter(c => c.kind === 'note').length % STICKY_COLORS.length];
     addCard({ kind: 'note', color, x: 200 + Math.random() * 120, y: 160 + Math.random() * 120 });
-  }, [addCard, data.cards]);
+  }, [addCard]);
 
   const addFromFinding = useCallback((finding: AgentFinding, index: number) => {
     const entityType = (finding.metadata?.entity_type as string) as BoardCard['entityType'] | undefined;
@@ -96,61 +120,73 @@ export function useBoard() {
 
   // Drag: don't spam history — snapshot origin on first move, commit once on release.
   const moveCard = useCallback((id: string, x: number, y: number, commitFinal: boolean) => {
-    if (!dragOrigin.current) dragOrigin.current = data;
-    const next = { ...data, cards: data.cards.map(c => c.id === id ? { ...c, x, y } : c) };
+    if (!dragOrigin.current) dragOrigin.current = dataRef.current;
     if (commitFinal) {
-      past.current = [...past.current.slice(-(MAX_HISTORY - 1)), dragOrigin.current];
-      future.current = [];
+      const origin = dragOrigin.current;
       dragOrigin.current = null;
-      setData(next);
+      setData(prev => {
+        past.current = [...past.current.slice(-(MAX_HISTORY - 1)), origin ?? prev];
+        future.current = [];
+        return { ...prev, cards: prev.cards.map(c => c.id === id ? { ...c, x, y } : c) };
+      });
     } else {
-      setData(next); // live move, no history entry yet
+      setData(prev => ({ ...prev, cards: prev.cards.map(c => c.id === id ? { ...c, x, y } : c) })); // live move, no history entry yet
     }
-  }, [data]);
+  }, []);
 
   const editCard = useCallback((id: string, patch: Partial<BoardCard>) => {
-    commit({ ...data, cards: data.cards.map(c => c.id === id ? { ...c, ...patch } : c) });
-  }, [data, commit]);
+    commit(prev => ({ ...prev, cards: prev.cards.map(c => c.id === id ? { ...c, ...patch } : c) }));
+  }, [commit]);
 
   const deleteCard = useCallback((id: string) => {
-    commit({
-      cards: data.cards.filter(c => c.id !== id),
-      links: data.links.filter(l => l.from !== id && l.to !== id),
-    });
-  }, [data, commit]);
+    commit(prev => ({
+      cards: prev.cards.filter(c => c.id !== id),
+      links: prev.links.filter(l => l.from !== id && l.to !== id),
+    }));
+  }, [commit]);
 
   const addLink = useCallback((from: string, to: string, label?: string) => {
     if (from === to) return;
-    if (data.links.some(l => (l.from === from && l.to === to) || (l.from === to && l.to === from))) return;
-    commit({ ...data, links: [...data.links, { id: newLinkId(), from, to, label }] });
-  }, [data, commit]);
+    commit(prev => {
+      if (prev.links.some(l => (l.from === from && l.to === to) || (l.from === to && l.to === from))) return prev;
+      return { ...prev, links: [...prev.links, { id: newLinkId(), from, to, label }] };
+    });
+  }, [commit]);
 
   const deleteLink = useCallback((id: string) => {
-    commit({ ...data, links: data.links.filter(l => l.id !== id) });
-  }, [data, commit]);
+    commit(prev => ({ ...prev, links: prev.links.filter(l => l.id !== id) }));
+  }, [commit]);
 
   const undo = useCallback(() => {
     if (!past.current.length) return;
-    const prev = past.current[past.current.length - 1];
+    const prevSnapshot = past.current[past.current.length - 1];
     past.current = past.current.slice(0, -1);
-    future.current = [data, ...future.current];
-    setData(prev);
-  }, [data]);
+    setData(current => {
+      future.current = [current, ...future.current];
+      return prevSnapshot;
+    });
+  }, []);
 
   const redo = useCallback(() => {
     if (!future.current.length) return;
-    const next = future.current[0];
+    const nextSnapshot = future.current[0];
     future.current = future.current.slice(1);
-    past.current = [...past.current, data];
-    setData(next);
-  }, [data]);
+    setData(current => {
+      past.current = [...past.current, current];
+      return nextSnapshot;
+    });
+  }, []);
 
   const autoLayout = useCallback(() => {
-    if (!data.cards.length) return;
+    const startedFrom = dataRef.current;
+    if (!startedFrom.cards.length) return;
     import('d3').then((d3) => {
+      // Re-read latest data instead of relying on the closure — the dynamic
+      // import is async, so the board could have changed while it resolved.
+      const current = dataRef.current;
       type N = BoardCard & d3.SimulationNodeDatum;
-      const nodes: N[] = data.cards.map(c => ({ ...c, x: c.x, y: c.y }));
-      const links = data.links
+      const nodes: N[] = current.cards.map(c => ({ ...c, x: c.x, y: c.y }));
+      const links = current.links
         .map(l => ({ source: nodes.find(n => n.id === l.from)!, target: nodes.find(n => n.id === l.to)! }))
         .filter(l => l.source && l.target);
 
@@ -163,21 +199,25 @@ export function useBoard() {
 
       for (let i = 0; i < 300; i++) sim.tick();
 
-      past.current = [...past.current.slice(-(MAX_HISTORY - 1)), data];
-      future.current = [];
-      setData({
-        ...data,
-        cards: data.cards.map((c, i) => ({ ...c, x: Math.round(nodes[i].x ?? c.x), y: Math.round(nodes[i].y ?? c.y) })),
+      setData(prev => {
+        past.current = [...past.current.slice(-(MAX_HISTORY - 1)), prev];
+        future.current = [];
+        return {
+          ...prev,
+          cards: prev.cards.map((c, i) => ({ ...c, x: Math.round(nodes[i]?.x ?? c.x), y: Math.round(nodes[i]?.y ?? c.y) })),
+        };
       });
     });
-  }, [data]);
+  }, []);
 
   const saveSnapshot = useCallback((label: string) => {
-    const snap: BoardSnapshot = { id: `snap_${Date.now()}`, label, timestamp: new Date().toISOString(), data };
-    const next = [snap, ...snapshots].slice(0, 20);
-    setSnapshots(next);
-    saveSnapshots(next);
-  }, [data, snapshots]);
+    const snap: BoardSnapshot = { id: `snap_${Date.now()}`, label, timestamp: new Date().toISOString(), data: dataRef.current };
+    setSnapshots(prev => {
+      const next = [snap, ...prev].slice(0, 20);
+      saveSnapshotsToStorage(next);
+      return next;
+    });
+  }, []);
 
   const restoreSnapshot = useCallback((id: string) => {
     const snap = snapshots.find(s => s.id === id);
@@ -186,16 +226,22 @@ export function useBoard() {
   }, [snapshots, commit]);
 
   const deleteSnapshot = useCallback((id: string) => {
-    const next = snapshots.filter(s => s.id !== id);
-    setSnapshots(next);
-    saveSnapshots(next);
-  }, [snapshots]);
+    setSnapshots(prev => {
+      const next = prev.filter(s => s.id !== id);
+      saveSnapshotsToStorage(next);
+      return next;
+    });
+  }, []);
 
-  const actions: BoardActions = {
+  const actions: BoardActions = useMemo(() => ({
     addCard, addStickyNote, addFromFinding, moveCard, editCard, deleteCard,
     addLink, deleteLink, undo, redo, autoLayout,
     saveSnapshot, restoreSnapshot, deleteSnapshot,
-  };
+  }), [
+    addCard, addStickyNote, addFromFinding, moveCard, editCard, deleteCard,
+    addLink, deleteLink, undo, redo, autoLayout,
+    saveSnapshot, restoreSnapshot, deleteSnapshot,
+  ]);
 
   return {
     data, snapshots, actions,

@@ -36,6 +36,14 @@ export function InvestigationBoard({ findings, onExit }: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const panState = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(null);
 
+  // One-off reads only (never used to compute a state update) — lets
+  // onCardPointerDown stay referentially stable across renders, which in
+  // turn lets EvidenceCardView's React.memo actually skip re-rendering
+  // untouched cards while one card is being dragged. Matters a lot once
+  // the board has hundreds of cards on it.
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
   const pinnedCards = useMemo(() => data.cards.filter(c => c.pinned), [data.cards]);
 
   // ── Canvas panning (background drag) ──────────────────────────
@@ -72,11 +80,11 @@ export function InvestigationBoard({ findings, onExit }: Props) {
       else { actions.addLink(linkFrom, id); setLinkFrom(null); }
       return;
     }
-    const card = data.cards.find(c => c.id === id);
+    const card = dataRef.current.cards.find(c => c.id === id);
     if (!card) return;
     dragCard.current = { id, startX: e.clientX, startY: e.clientY, ox: card.x, oy: card.y };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  }, [linkMode, linkFrom, actions, data.cards]);
+  }, [linkMode, linkFrom, actions]);
 
   const onCardPointerMove = useCallback((e: React.PointerEvent) => {
     if (!dragCard.current) return;
@@ -225,10 +233,9 @@ export function InvestigationBoard({ findings, onExit }: Props) {
               card={card}
               dimmed={presenting && !card.pinned}
               highlighted={linkMode && linkFrom === card.id}
-              onPointerDown={(e) => onCardPointerDown(card.id, e)}
-              onEdit={(patch) => actions.editCard(card.id, patch)}
-              onDelete={() => actions.deleteCard(card.id)}
-              onTogglePin={() => actions.editCard(card.id, { pinned: !card.pinned })}
+              onPointerDown={onCardPointerDown}
+              onEdit={actions.editCard}
+              onDelete={actions.deleteCard}
             />
           ))}
 

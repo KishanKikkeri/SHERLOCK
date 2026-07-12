@@ -1,11 +1,11 @@
-export type EventType = 'investigation_started'|'agent_completed'|'agent_skipped'|'report_ready'|'error';
+export type EventType = 'investigation_started'|'agent_completed'|'agent_skipped'|'agent_failed'|'report_ready'|'error';
 export interface WSEvent{timestamp:string;event_type:EventType;agent:string|null;message:string|null;data:{new_findings?:AgentFinding[];validated_findings?:AgentFinding[]|null;final_report?:FinalReport|null;}|null;}
 export interface AgentFinding{agent_name:string;finding_type:string;summary:string;evidence:string[];confidence:number;source_entities:string[];metadata:Record<string,unknown>;validated:boolean;validation_notes:string;}
 export interface FinalReport{query:string;narrative:string;findings:AgentFinding[];rejected_findings:AgentFinding[];agents_consulted:string[];}
 export type InvestigationStatus='idle'|'running'|'complete'|'error';
-export type AgentStatus='pending'|'running'|'complete'|'skipped';
+export type AgentStatus='pending'|'running'|'complete'|'skipped'|'failed';
 export interface AgentStep{name:string;nodeKey:string;status:AgentStatus;message:string|null;timestamp:string|null;findings:AgentFinding[];}
-export interface FeedEntry{id:string;timestamp:string;agent:string;status:'done'|'skipped'|'started'|'error';message:string;}
+export interface FeedEntry{id:string;timestamp:string;agent:string;status:'done'|'skipped'|'started'|'error'|'failed';message:string;}
 export interface GraphNode{id:string;label:string;type:NodeType;data:Record<string,unknown>;}
 export interface GraphEdge{source:string;target:string;type:string;}
 export interface GraphData{nodes:GraphNode[];edges:GraphEdge[];center:string;}

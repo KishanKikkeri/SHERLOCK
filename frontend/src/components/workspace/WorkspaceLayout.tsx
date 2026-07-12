@@ -122,6 +122,7 @@ export function WorkspaceLayout({ state, actions, onOpenBoard }: Props) {
         <InvestigationTimeline
           steps={state.steps}
           elapsedMs={state.elapsedMs}
+          feed={state.feed}
         />
 
         {/* Center: intelligence graph */}

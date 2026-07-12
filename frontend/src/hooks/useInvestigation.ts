@@ -21,11 +21,12 @@ export function useInvestigation():[InvestigationState,InvestigationActions]{
       const next={...prev};
       const ts=new Date(event.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
       if(event.event_type!=='report_ready'){
-        next.feed=[...prev.feed,{id:`${event.timestamp}-${Math.random()}`,timestamp:ts,agent:event.agent??'System',status:event.event_type==='agent_skipped'?'skipped':event.event_type==='error'?'error':event.event_type==='investigation_started'?'started':'done',message:event.message??''}];
+        next.feed=[...prev.feed,{id:`${event.timestamp}-${Math.random()}`,timestamp:ts,agent:event.agent??'System',status:event.event_type==='agent_skipped'?'skipped':event.event_type==='agent_failed'?'failed':event.event_type==='error'?'error':event.event_type==='investigation_started'?'started':'done',message:event.message??''}];
       }
-      if(['agent_completed','agent_skipped'].includes(event.event_type)){
-        next.auditTrail=[...prev.auditTrail,{agent:event.agent??'',status:event.event_type==='agent_skipped'?'skipped':'done',message:event.message??''}];
-        next.steps=prev.steps.map(s=>s.name!==event.agent?s:{...s,status:event.event_type==='agent_skipped'?'skipped':'complete',message:event.message??null,timestamp:ts,findings:event.data?.new_findings??[]});
+      if(['agent_completed','agent_skipped','agent_failed'].includes(event.event_type)){
+        const stepStatus=event.event_type==='agent_skipped'?'skipped':event.event_type==='agent_failed'?'failed':'complete';
+        next.auditTrail=[...prev.auditTrail,{agent:event.agent??'',status:stepStatus,message:event.message??''}];
+        next.steps=prev.steps.map(s=>s.name!==event.agent?s:{...s,status:stepStatus,message:event.message??null,timestamp:ts,findings:event.data?.new_findings??[]});
         const ci=next.steps.findIndex(s=>s.name===event.agent);
         if(ci>=0){const ni=next.steps.findIndex((s,i)=>i>ci&&s.status==='pending');if(ni>=0)next.steps=next.steps.map((s,i)=>i===ni?{...s,status:'running'}:s);}
       }
