@@ -178,6 +178,102 @@ Up to 5 `AgentFinding` objects (finding_types: `patrol_strategy`, `surveillance_
 
 ---
 
+## Tier 2: Entity Resolution Agent
+
+**File:** `backend/agents/entity_resolution/agent.py`
+**Name in plan:** `EntityResolution`
+**Always runs:** effectively yes — `plan_agents()` includes it for every query, alongside NetworkAnalysis.
+
+### Purpose
+Resolves the messy raw name on each `PersonCrimeLink.raw_name_used` ("R Kumar", "Ravi K.", ...) to its canonical `Person`, three ways in confidence order: exact match, known `PersonAlias`, then `difflib.SequenceMatcher` fuzzy match against name + aliases for variants not in the ground-truth alias table at all.
+
+### Tools
+SQLAlchemy query on `PersonCrimeLink` (scoped to `graph_context.crime_ids` when available) + stdlib `difflib`. No new dependency.
+
+### Inputs
+`graph_context.crime_ids` (optional scope from Crime Records)
+
+### Outputs
+- `entity_resolution` finding: how many references resolved to how many canonical identities, with up to 5 example alias/fuzzy resolutions as evidence
+- `entity_resolution_flag` finding (only if any match scored below 72% similarity): explicit "needs manual review" flag, kept separate from the main finding so it doesn't inflate the primary confidence score
+
+### Confidence strategy
+0.9 when every reference resolved cleanly; 0.7 if any low-confidence matches needed flagging. The flag finding itself is always 0.55 — deliberately below the evidence-validation acceptance floor's comfort zone, so it reads as "flagged," not "confirmed."
+
+---
+
+## Tier 2: Timeline Reconstruction Agent
+
+**File:** `backend/agents/timeline_reconstruction/agent.py`
+**Name in plan:** `TimelineReconstruction`
+**Always runs:** effectively yes — same as EntityResolution.
+
+### Purpose
+Orders the crimes in scope chronologically and looks for a real (if simple) escalation signal: the gap between consecutive incidents shrinking monotonically across the sequence.
+
+### Tools
+SQLAlchemy query on `Crime` (+ `FIR`, `Location`), scoped to `graph_context.crime_ids`. Sorted timestamps, pairwise day deltas — no ML.
+
+### Inputs
+`graph_context.crime_ids` (optional)
+
+### Outputs
+One `investigation_timeline` finding: event count, date span, first/last incident, and an escalation note appended to the summary when gaps are monotonically shrinking.
+
+### Confidence strategy
+0.92 normally; 0.8 when the escalation call fires, since that's a heuristic layered on top of the (certain) chronological facts.
+
+---
+
+## Tier 2: Similar Case Agent
+
+**File:** `backend/agents/similar_case/agent.py`
+**Name in plan:** `SimilarCase`
+**Gate:** only when the query specifies a crime type (`filters.crime_type`) — MO comparison needs that scope to mean anything.
+
+### Purpose
+Compares `Crime.modus_operandi` text across cases via `difflib.SequenceMatcher`, surfacing case pairs whose MO closely matches but which aren't the same FIR — a simple way to flag possible serial activity or a shared MO worth cross-referencing.
+
+### Tools
+SQLAlchemy query on `Crime` (capped at 400 rows as an O(n²)-comparison guardrail) + stdlib `difflib`.
+
+### Known limitation
+The synthetic dataset draws `modus_operandi` from a small fixed vocabulary (~23 short phrases like "chain snatching", "phishing") rather than free-text narratives, so within-crime-type matches are frequently at or near 100% similarity — that's a property of the demo data, not a bug in the agent. Real FIR narrative text would produce a much more differentiated similarity distribution.
+
+### Inputs
+`filters.crime_type`, `graph_context.crime_ids` (used to pick comparison anchors, not to restrict the pool)
+
+### Outputs
+One `similar_case` finding: pair count above the 0.6 similarity threshold, top 5 pairs as evidence.
+
+### Confidence strategy
+Fixed at 0.75 — text similarity is a real signal but not a certainty, and deliberately not tuned per-match given the known MO-vocabulary limitation above.
+
+---
+
+## Tier 2: Forecasting Agent
+
+**File:** `backend/agents/forecasting/agent.py`
+**Name in plan:** `Forecasting`
+**Gate:** only when the query implies a forecast (`filters.wants_forecast`) — same keyword set Pattern Analysis already used for its heuristic placeholder.
+
+### Purpose
+The dedicated forecasting agent `FUTURE_ROADMAP.md` and `PatternAnalysisAgent`'s own docstring called for, replacing the inline "festival season" heuristic with a real per-district monthly time series and an ordinary-least-squares linear trend fit, projecting next month's count.
+
+### Tools
+`graph_service.find_location_clusters()` (same data Pattern Analysis uses) + a stdlib-only OLS fit (no numpy/pandas — this codebase stays dependency-light on purpose).
+
+### Inputs
+`filters.crime_type`, `filters.district`
+
+### Outputs
+One `hotspot_forecast` finding per district with a rising trend (slope > 0.15/month over ≥3 months of data), or a single "no notable rising trend" finding if none qualify.
+
+### Confidence strategy
+Fixed at 0.68 — deliberately moderate. A linear fit over a handful of monthly buckets is a real trend signal, not a validated forecast; the confidence score says so rather than overclaiming.
+
+---
+
 ## Governance: Evidence Validation Agent
 
 **File:** `backend/agents/evidence_validation/agent.py`
