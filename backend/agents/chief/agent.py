@@ -17,9 +17,12 @@ language narrative on top of the structured findings. Without it, a
 deterministic template is used — the pipeline works fully either way.
 """
 
+import logging
 import os
 
 from backend.agents.base.query_parser import extract_filters, plan_agents
+
+logger = logging.getLogger(__name__)
 
 
 class ChiefAgent:
@@ -87,9 +90,11 @@ class ChiefAgent:
         if os.getenv("ANTHROPIC_API_KEY"):
             try:
                 return self._generate_narrative_llm(query, accepted_findings)
-            except Exception as e:  # pragma: no cover - network/availability dependent
+            except Exception:
+                logger.warning("LLM narrative generation failed, falling back to template", exc_info=True)
                 return self._generate_narrative_template(query, accepted_findings) + \
-                    f"\n\n(Note: LLM narrative generation unavailable: {e})"
+                    "\n\n(Note: AI-written narrative was unavailable for this report; " \
+                    "the summary above was generated from structured findings directly.)"
 
         return self._generate_narrative_template(query, accepted_findings)
 

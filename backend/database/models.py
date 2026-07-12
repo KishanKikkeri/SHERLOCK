@@ -91,7 +91,7 @@ class Location(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)          # e.g. "Mysuru City"
-    district = Column(String, nullable=False)      # e.g. "Mysuru"
+    district = Column(String, nullable=False, index=True)      # e.g. "Mysuru"
     state = Column(String, nullable=False, default="Karnataka")
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
@@ -114,7 +114,7 @@ class Person(Base):
     gender = Column(Enum(Gender), nullable=False)
     age = Column(Integer, nullable=False)
     occupation = Column(String, nullable=True)
-    home_location_id = Column(Integer, ForeignKey("locations.id"), nullable=True)
+    home_location_id = Column(Integer, ForeignKey("locations.id"), nullable=True, index=True)
 
     home_location = relationship("Location")
     aliases = relationship("PersonAlias", back_populates="person", cascade="all, delete-orphan")
@@ -141,7 +141,7 @@ class PersonAlias(Base):
     __tablename__ = "person_aliases"
 
     id = Column(Integer, primary_key=True)
-    person_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
+    person_id = Column(Integer, ForeignKey("persons.id"), nullable=False, index=True)
     alias_name = Column(String, nullable=False)
 
     person = relationship("Person", back_populates="aliases")
@@ -158,9 +158,9 @@ class Crime(Base):
     __tablename__ = "crimes"
 
     id = Column(Integer, primary_key=True)
-    type = Column(Enum(CrimeType), nullable=False)
-    timestamp = Column(DateTime, nullable=False, default=datetime.utcnow)
-    location_id = Column(Integer, ForeignKey("locations.id"), nullable=False)
+    type = Column(Enum(CrimeType), nullable=False, index=True)
+    timestamp = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    location_id = Column(Integer, ForeignKey("locations.id"), nullable=False, index=True)
     modus_operandi = Column(String, nullable=True)
     description = Column(Text, nullable=True)
 
@@ -200,8 +200,8 @@ class PersonCrimeLink(Base):
     __tablename__ = "person_crime_links"
 
     id = Column(Integer, primary_key=True)
-    person_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
-    crime_id = Column(Integer, ForeignKey("crimes.id"), nullable=False)
+    person_id = Column(Integer, ForeignKey("persons.id"), nullable=False, index=True)
+    crime_id = Column(Integer, ForeignKey("crimes.id"), nullable=False, index=True)
     role = Column(Enum(PersonRole), nullable=False)
     raw_name_used = Column(String, nullable=False)
 
@@ -221,7 +221,7 @@ class Vehicle(Base):
 
     id = Column(Integer, primary_key=True)
     registration_number = Column(String, nullable=False, unique=True)
-    owner_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
+    owner_id = Column(Integer, ForeignKey("persons.id"), nullable=False, index=True)
     vehicle_type = Column(String, nullable=True)  # car, two-wheeler, etc.
 
     owner = relationship("Person", back_populates="vehicles")
@@ -235,7 +235,7 @@ class Phone(Base):
 
     id = Column(Integer, primary_key=True)
     number = Column(String, nullable=False, unique=True)
-    owner_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
+    owner_id = Column(Integer, ForeignKey("persons.id"), nullable=False, index=True)
 
     owner = relationship("Person", back_populates="phones")
 
@@ -249,8 +249,8 @@ class BankAccount(Base):
     id = Column(Integer, primary_key=True)
     bank = Column(String, nullable=False)
     account_number = Column(String, nullable=False, unique=True)
-    owner_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
-    is_flagged_mule = Column(Boolean, nullable=False, default=False)
+    owner_id = Column(Integer, ForeignKey("persons.id"), nullable=False, index=True)
+    is_flagged_mule = Column(Boolean, nullable=False, default=False, index=True)
 
     owner = relationship("Person", back_populates="bank_accounts")
     sent_transactions = relationship(
@@ -272,9 +272,9 @@ class Transaction(Base):
     id = Column(Integer, primary_key=True)
     amount = Column(Float, nullable=False)
     timestamp = Column(DateTime, nullable=False, default=datetime.utcnow)
-    sender_account_id = Column(Integer, ForeignKey("bank_accounts.id"), nullable=False)
-    receiver_account_id = Column(Integer, ForeignKey("bank_accounts.id"), nullable=False)
-    is_suspicious = Column(Boolean, nullable=False, default=False)
+    sender_account_id = Column(Integer, ForeignKey("bank_accounts.id"), nullable=False, index=True)
+    receiver_account_id = Column(Integer, ForeignKey("bank_accounts.id"), nullable=False, index=True)
+    is_suspicious = Column(Boolean, nullable=False, default=False, index=True)
 
     sender_account = relationship(
         "BankAccount", back_populates="sent_transactions", foreign_keys=[sender_account_id]
@@ -300,8 +300,8 @@ class PersonAssociation(Base):
     __tablename__ = "person_associations"
 
     id = Column(Integer, primary_key=True)
-    person_a_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
-    person_b_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
+    person_a_id = Column(Integer, ForeignKey("persons.id"), nullable=False, index=True)
+    person_b_id = Column(Integer, ForeignKey("persons.id"), nullable=False, index=True)
     relation_type = Column(Enum(RelationType), nullable=False)
     strength = Column(Float, nullable=False, default=1.0)  # 0-1, used for graph edge weight
 

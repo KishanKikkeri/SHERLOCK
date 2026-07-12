@@ -1,26 +1,33 @@
 """
-SHERLOCK — FastAPI application (Phase 6).
+SHERLOCK — FastAPI application (Phase 6, stabilized).
 
 Endpoints:
     WS  /ws/investigate      Live investigation stream (primary)
     GET /metrics             Dataset + graph stats for the header strip
     GET /graph/{person_id}   Subgraph around a person (for the vis panel)
     GET /health              Liveness probe
+    POST /export/pdf         PDF investigation report export
 """
 
 import json
+import logging
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response as FastAPIResponse
 
 from backend.api.investigation_stream import stream_investigation
 from backend.database.config import SessionLocal
-from backend.database.models import (
-    Person, Crime, FIR, BankAccount, Transaction,
-    PersonCrimeLink, PersonAssociation, PersonRole,
-)
+from backend.database.models import Person, Crime, FIR, BankAccount, Transaction
 from backend.graph.service import get_graph_service
 from backend.graph.schema import node_key
+from backend.logging_config import configure_logging
+from backend.reporting.pdf_export import generate_investigation_pdf
+
+configure_logging()
+logger = logging.getLogger(__name__)
+
+MAX_GRAPH_HOPS = 5  # BFS cost grows quickly; no legitimate UI use case needs more than this
 
 app = FastAPI(title="SHERLOCK Crime Intelligence API", version="1.0.0")
 
@@ -64,6 +71,9 @@ def metrics():
             "fraud_network_size": mule_accounts,
             "suspicious_transactions": suspicious_tx,
         }
+    except Exception:
+        logger.exception("GET /metrics failed")
+        raise HTTPException(status_code=500, detail="Failed to compute metrics.")
     finally:
         session.close()
 
@@ -78,6 +88,9 @@ def get_person_subgraph(person_id: int, hops: int = 1):
     Returns a small ego-graph around `person_id` (up to `hops` steps) as
     a {nodes, edges} payload for Cytoscape / react-force-graph.
     """
+    if not (1 <= hops <= MAX_GRAPH_HOPS):
+        raise HTTPException(status_code=422, detail=f"hops must be between 1 and {MAX_GRAPH_HOPS}.")
+
     session = SessionLocal()
     try:
         graph_service = get_graph_service(backend="networkx", session=session)
@@ -131,6 +144,11 @@ def get_person_subgraph(person_id: int, hops: int = 1):
             })
 
         return {"nodes": nodes, "edges": edges, "center": center}
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("GET /graph/%s failed", person_id)
+        raise HTTPException(status_code=500, detail="Failed to build subgraph.")
     finally:
         session.close()
 
@@ -157,7 +175,14 @@ async def ws_investigate(websocket: WebSocket):
 
     except WebSocketDisconnect:
         pass
+    except json.JSONDecodeError:
+        logger.warning("Received non-JSON payload on /ws/investigate")
+        try:
+            await websocket.send_json({"event_type": "error", "message": "Malformed request: expected JSON with a 'query' field."})
+        except Exception:
+            pass
     except Exception as e:
+        logger.exception("Unhandled error in /ws/investigate")
         try:
             await websocket.send_json({"event_type": "error", "message": str(e)})
         except Exception:
@@ -168,11 +193,6 @@ async def ws_investigate(websocket: WebSocket):
 # PDF Export
 # ---------------------------------------------------------------------------
 
-from fastapi import Body
-from fastapi.responses import Response as FastAPIResponse
-from backend.reporting.pdf_export import generate_investigation_pdf
-
-
 @app.post("/export/pdf")
 async def export_pdf(payload: dict = Body(...)):
     """
@@ -181,11 +201,20 @@ async def export_pdf(payload: dict = Body(...)):
     Body: { "final_report": {...}, "audit_trail": [...], "case_id": "..." }
     Returns: application/pdf binary
     """
-    final_report = payload.get("final_report", {})
-    audit_trail  = payload.get("audit_trail",  [])
+    final_report = payload.get("final_report") or {}
+    audit_trail  = payload.get("audit_trail")  or []
     case_id      = payload.get("case_id")
 
-    pdf_bytes = generate_investigation_pdf(final_report, audit_trail, case_id)
+    if not isinstance(final_report, dict):
+        raise HTTPException(status_code=422, detail="final_report must be an object.")
+    if not isinstance(audit_trail, list):
+        raise HTTPException(status_code=422, detail="audit_trail must be an array.")
+
+    try:
+        pdf_bytes = generate_investigation_pdf(final_report, audit_trail, case_id)
+    except Exception:
+        logger.exception("PDF export failed for case_id=%r", case_id)
+        raise HTTPException(status_code=500, detail="PDF generation failed.")
 
     return FastAPIResponse(
         content=pdf_bytes,

@@ -51,16 +51,26 @@ def plan_agents(filters: dict) -> dict:
     """Decide which specialist agents the investigation needs."""
     agents = ["CrimeRecords"]
 
-    # NetworkAnalysis runs for ALL investigation types
+    # NetworkAnalysis, EntityResolution and TimelineReconstruction run for
+    # ALL investigation types — cheap, broadly useful, no filter gating needed.
     agents.append("NetworkAnalysis")
+    agents.append("EntityResolution")
+    agents.append("TimelineReconstruction")
 
     if filters["is_financial"]:
         agents.append("FinancialAgent")
+
+    if filters["crime_type"]:
+        # MO comparison is only meaningful once scoped to a specific crime type
+        agents.append("SimilarCase")
 
     if (filters["wants_repeat_offenders"] or filters["wants_forecast"]
             or filters["crime_type"] or filters["festival_season"]
             or filters["is_financial"]):
         agents.append("PatternAnalysis")
+
+    if filters["wants_forecast"]:
+        agents.append("Forecasting")
 
     # Prevention Intelligence always fires — converts findings into actions
     agents.append("PreventionAgent")

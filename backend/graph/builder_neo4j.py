@@ -23,6 +23,9 @@ Usage:
 from backend.database.models import (
     Person, Location, Crime, FIR, Vehicle, Phone, BankAccount, Transaction,
     PersonCrimeLink, PersonRole, PersonAssociation,
+    # Stage A / Phase A5 additions
+    Accused, Victim, Witness, Officer, Court, Property, Weapon, Organization,
+    Arrest, ChargeSheet, CallRecord,
 )
 from backend.graph.neo4j_client import Neo4jClient
 from backend.graph.schema import CONSTRAINT_STATEMENTS, NODE_LABELS, RELATIONSHIP_TYPES
@@ -74,13 +77,14 @@ def _node_batches(session):
 
     firs = [{
         "id": f.id, "fir_number": f.fir_number, "status": f.status.value,
-        "investigating_officer": f.investigating_officer,
+        # Stage A fix: was a plain string; now resolved from the Officer relationship.
+        "investigating_officer_badge": (f.investigating_officer.badge_number if f.investigating_officer else None),
     } for f in session.query(FIR).all()]
     batches.append(("FIR", """
         UNWIND $rows AS row
         MERGE (n:FIR {id: row.id})
         SET n.fir_number = row.fir_number, n.status = row.status,
-            n.investigating_officer = row.investigating_officer
+            n.investigating_officer_badge = row.investigating_officer_badge
     """, firs))
 
     phones = [{"id": p.id, "number": p.number} for p in session.query(Phone).all()]
@@ -119,6 +123,82 @@ def _node_batches(session):
         MERGE (n:Transaction {id: row.id})
         SET n.amount = row.amount, n.timestamp = row.timestamp, n.is_suspicious = row.is_suspicious
     """, transactions))
+
+    # -----------------------------------------------------------------------
+    # Stage A / Phase A5 additions — new AER node batches, additive.
+    # -----------------------------------------------------------------------
+
+    officers = [{
+        "id": o.id, "name": o.name, "badge_number": o.badge_number,
+        "rank": o.rank.value, "posting_station": o.posting_station,
+    } for o in session.query(Officer).all()]
+    batches.append(("Officer", """
+        UNWIND $rows AS row
+        MERGE (n:Officer {id: row.id})
+        SET n.name = row.name, n.badge_number = row.badge_number,
+            n.rank = row.rank, n.posting_station = row.posting_station
+    """, officers))
+
+    courts = [{
+        "id": c.id, "name": c.name, "level": c.level.value, "district": c.district,
+    } for c in session.query(Court).all()]
+    batches.append(("Court", """
+        UNWIND $rows AS row
+        MERGE (n:Court {id: row.id})
+        SET n.name = row.name, n.level = row.level, n.district = row.district
+    """, courts))
+
+    orgs = [{
+        "id": o.id, "name": o.name, "org_type": o.org_type.value,
+    } for o in session.query(Organization).all()]
+    batches.append(("Organization", """
+        UNWIND $rows AS row
+        MERGE (n:Organization {id: row.id})
+        SET n.name = row.name, n.org_type = row.org_type
+    """, orgs))
+
+    weapons = [{
+        "id": w.id, "weapon_type": w.weapon_type.value, "status": w.status.value,
+    } for w in session.query(Weapon).all()]
+    batches.append(("Weapon", """
+        UNWIND $rows AS row
+        MERGE (n:Weapon {id: row.id})
+        SET n.weapon_type = row.weapon_type, n.status = row.status
+    """, weapons))
+
+    properties = [{
+        "id": p.id, "description": p.description, "category": p.category, "status": p.status.value,
+    } for p in session.query(Property).all()]
+    batches.append(("Property", """
+        UNWIND $rows AS row
+        MERGE (n:Property {id: row.id})
+        SET n.description = row.description, n.category = row.category, n.status = row.status
+    """, properties))
+
+    accused_rows = [{
+        "id": a.id, "person_id": a.person_id, "repeat_offender": a.repeat_offender,
+    } for a in session.query(Accused).all()]
+    batches.append(("Accused", """
+        UNWIND $rows AS row
+        MERGE (n:Accused {id: row.id})
+        SET n.person_id = row.person_id, n.repeat_offender = row.repeat_offender
+    """, accused_rows))
+
+    victim_rows = [{"id": v.id, "person_id": v.person_id} for v in session.query(Victim).all()]
+    batches.append(("Victim", """
+        UNWIND $rows AS row
+        MERGE (n:Victim {id: row.id})
+        SET n.person_id = row.person_id
+    """, victim_rows))
+
+    witness_rows = [{
+        "id": w.id, "person_id": w.person_id, "protection_flag": w.protection_flag,
+    } for w in session.query(Witness).all()]
+    batches.append(("Witness", """
+        UNWIND $rows AS row
+        MERGE (n:Witness {id: row.id})
+        SET n.person_id = row.person_id, n.protection_flag = row.protection_flag
+    """, witness_rows))
 
     return batches
 
@@ -247,6 +327,109 @@ def _relationship_batches(session):
         MERGE (a)-[r:PERSON_ASSOCIATED_WITH]-(b)
         SET r.relation_type = row.relation_type, r.strength = row.strength
     """, assoc_rows))
+
+    # -----------------------------------------------------------------------
+    # Stage A / Phase A5 additions — new AER relationship batches, additive.
+    # -----------------------------------------------------------------------
+
+    rows = [{"id": a.id, "fir_id": a.fir_id} for a in session.query(Accused).all()]
+    batches.append(("ACCUSED_IN", """
+        UNWIND $rows AS row
+        MATCH (a:Accused {id: row.id}), (f:FIR {id: row.fir_id})
+        MERGE (a)-[:ACCUSED_IN]->(f)
+    """, rows))
+
+    rows = [{"id": v.id, "fir_id": v.fir_id} for v in session.query(Victim).all()]
+    batches.append(("VICTIM_IN", """
+        UNWIND $rows AS row
+        MATCH (v:Victim {id: row.id}), (f:FIR {id: row.fir_id})
+        MERGE (v)-[:VICTIM_IN]->(f)
+    """, rows))
+
+    rows = [{"id": w.id, "fir_id": w.fir_id} for w in session.query(Witness).all()]
+    batches.append(("WITNESS_OF", """
+        UNWIND $rows AS row
+        MATCH (w:Witness {id: row.id}), (f:FIR {id: row.fir_id})
+        MERGE (w)-[:WITNESS_OF]->(f)
+    """, rows))
+
+    rows = [
+        {"fir_id": f.id, "officer_id": f.investigating_officer_id}
+        for f in session.query(FIR).all() if f.investigating_officer_id
+    ]
+    batches.append(("INVESTIGATED_BY", """
+        UNWIND $rows AS row
+        MATCH (f:FIR {id: row.fir_id}), (o:Officer {id: row.officer_id})
+        MERGE (f)-[:INVESTIGATED_BY]->(o)
+    """, rows))
+
+    rows = [{
+        "person_id": a.person_id, "fir_id": a.fir_id,
+        "status": a.status.value, "arrest_date": a.arrest_date.isoformat(),
+    } for a in session.query(Arrest).all()]
+    batches.append(("ARRESTED_IN", """
+        UNWIND $rows AS row
+        MATCH (p:Person {id: row.person_id}), (f:FIR {id: row.fir_id})
+        MERGE (p)-[r:ARRESTED_IN]->(f)
+        SET r.status = row.status, r.arrest_date = row.arrest_date
+    """, rows))
+
+    rows = [
+        {"fir_id": cs.fir_id, "court_id": cs.court_id, "status": cs.status.value}
+        for cs in session.query(ChargeSheet).all() if cs.court_id
+    ]
+    batches.append(("CHARGESHEETED_IN", """
+        UNWIND $rows AS row
+        MATCH (f:FIR {id: row.fir_id}), (c:Court {id: row.court_id})
+        MERGE (f)-[r:CHARGESHEETED_IN]->(c)
+        SET r.status = row.status
+    """, rows))
+
+    rows = [
+        {"id": p.id, "location_id": p.seized_location_id}
+        for p in session.query(Property).all() if p.seized_location_id
+    ]
+    batches.append(("SEIZED_AT", """
+        UNWIND $rows AS row
+        MATCH (p:Property {id: row.id}), (l:Location {id: row.location_id})
+        MERGE (p)-[:SEIZED_AT]->(l)
+    """, rows))
+
+    recovered_rows = [
+        {"kind": "Property", "id": p.id, "person_id": p.recovered_from_person_id}
+        for p in session.query(Property).all() if p.recovered_from_person_id
+    ] + [
+        {"kind": "Weapon", "id": w.id, "person_id": w.recovered_from_person_id}
+        for w in session.query(Weapon).all() if w.recovered_from_person_id
+    ]
+    for kind in ("Property", "Weapon"):
+        kind_rows = [r for r in recovered_rows if r["kind"] == kind]
+        batches.append(("RECOVERED_FROM", f"""
+            UNWIND $rows AS row
+            MATCH (n:{kind} {{id: row.id}}), (p:Person {{id: row.person_id}})
+            MERGE (n)-[:RECOVERED_FROM]->(p)
+        """, kind_rows))
+
+    rows = [
+        {"id": w.id, "fir_id": w.used_in_fir_id}
+        for w in session.query(Weapon).all() if w.used_in_fir_id
+    ]
+    batches.append(("USES", """
+        UNWIND $rows AS row
+        MATCH (w:Weapon {id: row.id}), (f:FIR {id: row.fir_id})
+        MERGE (w)-[:USES]->(f)
+    """, rows))
+
+    rows = [{
+        "caller_id": c.caller_phone_id, "receiver_id": c.receiver_phone_id,
+        "timestamp": c.timestamp.isoformat(), "duration_seconds": c.duration_seconds,
+    } for c in session.query(CallRecord).all()]
+    batches.append(("CALLS", """
+        UNWIND $rows AS row
+        MATCH (a:Phone {id: row.caller_id}), (b:Phone {id: row.receiver_id})
+        MERGE (a)-[r:CALLS {timestamp: row.timestamp}]->(b)
+        SET r.duration_seconds = row.duration_seconds
+    """, rows))
 
     return batches
 

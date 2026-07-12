@@ -16,6 +16,7 @@ class EventType(str, Enum):
     AGENT_STARTED = "agent_started"
     AGENT_COMPLETED = "agent_completed"
     AGENT_SKIPPED = "agent_skipped"
+    AGENT_FAILED = "agent_failed"  # one agent errored; the investigation continues without it
     FINDING_PRODUCED = "finding_produced"
     VALIDATION_COMPLETE = "validation_complete"
     REPORT_READY = "report_ready"

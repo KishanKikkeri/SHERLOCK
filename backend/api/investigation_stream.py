@@ -10,22 +10,37 @@ node executes, which maps directly onto our AgentEvent protocol.
 
 import asyncio
 import json
+import logging
 
 from backend.api.events import EventType, make_event
 from backend.database.config import SessionLocal
 from backend.graph.service import get_graph_service
 from backend.orchestrator.graph import build_investigation_graph
 
-# Node name -> display name for the activity feed
+logger = logging.getLogger(__name__)
+
+# Node name -> display name for the activity feed.
+#
+# IMPORTANT: every value here must be unique. The frontend's investigation
+# timeline (`useInvestigation.ts`) matches an incoming event's `agent` field
+# against `AgentStep.name` to update the right row — if two node keys ever
+# shared a display name again (as chief_plan/chief_synthesis once did, both
+# as plain "Chief Investigation Officer"), the second node's completion
+# event would silently overwrite the first node's row instead of updating
+# its own, and that row would never receive its own update at all.
 NODE_LABELS = {
-    "chief_plan":          "Chief Investigation Officer",
-    "crime_records":       "Crime Records Agent",
-    "network_analysis":    "Network Analysis Agent",
-    "financial_agent":     "Financial Intelligence Agent",
-    "pattern_analysis":    "Pattern & MO Agent",
-    "prevention_agent":    "Prevention Intelligence Agent",
-    "evidence_validation": "Evidence Validation Agent",
-    "chief_synthesis":     "Chief Investigation Officer",
+    "chief_plan":              "Chief Investigation Officer — Planning",
+    "crime_records":           "Crime Records Agent",
+    "network_analysis":        "Network Analysis Agent",
+    "entity_resolution":       "Entity Resolution Agent",
+    "timeline_reconstruction": "Timeline Reconstruction Agent",
+    "financial_agent":         "Financial Intelligence Agent",
+    "similar_case":            "Similar Case Agent",
+    "pattern_analysis":        "Pattern & MO Agent",
+    "forecasting_agent":       "Forecasting Agent",
+    "prevention_agent":        "Prevention Intelligence Agent",
+    "evidence_validation":     "Evidence Validation Agent",
+    "chief_synthesis":         "Chief Investigation Officer — Synthesis",
 }
 
 
@@ -67,7 +82,11 @@ async def stream_investigation(query: str, send):
             message = trail[-1]["message"] if trail else f"{display_name} completed."
             status = trail[-1]["status"] if trail else "done"
 
-            etype = EventType.AGENT_SKIPPED if status == "skipped" else EventType.AGENT_COMPLETED
+            etype = (
+                EventType.AGENT_SKIPPED if status == "skipped"
+                else EventType.AGENT_FAILED if status == "failed"
+                else EventType.AGENT_COMPLETED
+            )
 
             # Attach new findings as data payload for the frontend
             new_findings = node_state.get("findings", [])
@@ -100,6 +119,7 @@ async def stream_investigation(query: str, send):
             ))
 
     except Exception as e:
+        logger.exception("Investigation pipeline failed for query: %r", query)
         await send(make_event(EventType.ERROR, message=str(e)))
     finally:
         session.close()
