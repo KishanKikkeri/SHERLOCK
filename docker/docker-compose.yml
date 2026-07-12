@@ -1,6 +1,27 @@
 version: "3.9"
 
 services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: sherlock_app
+    ports:
+      - "8000:8000"
+    environment:
+      # Defaults here use Postgres + Neo4j (the services below). For the
+      # zero-dependency SQLite + NetworkX mode instead, just remove these
+      # two lines and `depends_on` — everything falls back automatically.
+      DATABASE_URL: postgresql+psycopg2://sherlock:sherlock@postgres:5432/sherlock
+      GRAPH_BACKEND: networkx
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: sherlock123
+      # ANTHROPIC_API_KEY: set this in your shell or an .env file — never commit it
+    depends_on:
+      - postgres
+      - neo4j
+
   postgres:
     image: postgres:16-alpine
     container_name: sherlock_postgres
