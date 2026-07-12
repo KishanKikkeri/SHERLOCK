@@ -6,8 +6,9 @@ Runs the milestone query:
    seasons and identify future hotspots."
 
 …through the complete LangGraph agent orchestration:
-  Chief (plan) → Crime Records → Network Analysis → Pattern Analysis
-  → Evidence Validation → Chief (synthesis)
+  Chief (plan) → Crime Records → Network Analysis → Entity Resolution
+  → Timeline Reconstruction → Financial → Similar Case → Pattern Analysis
+  → Forecasting → Prevention → Evidence Validation → Chief (synthesis)
 
 Then prints the investigation activity feed and final report.
 
