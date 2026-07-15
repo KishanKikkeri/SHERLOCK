@@ -114,3 +114,26 @@ class WeaponType(str, enum.Enum):
     BLUNT = "blunt"
     EXPLOSIVE = "explosive"
     OTHER = "other"
+
+
+# ---------------------------------------------------------------------------
+# Stage C1 — Investigation Lifecycle (new, additive; nothing above is touched)
+# ---------------------------------------------------------------------------
+
+class InvestigationSessionStatus(str, enum.Enum):
+    """Lifecycle state of an investigation *session* (the working-desk
+    concept from Stage C1), distinct from `FIRStatus` (the legal status of
+    the underlying case record) and from `Investigation.status` (a single
+    officer-assignment span). A session can be reopened after being closed;
+    archiving is a separate, later, one-way step."""
+    OPEN = "open"
+    CLOSED = "closed"
+    REOPENED = "reopened"
+    ARCHIVED = "archived"
+
+
+class InvestigationPriority(str, enum.Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"

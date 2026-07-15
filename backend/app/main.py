@@ -17,6 +17,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response as FastAPIResponse
 
 from backend.api.investigation_stream import stream_investigation
+from backend.api.sessions import router as sessions_router
+from backend.api.conversation import router as conversation_router
+from backend.api.board import router as board_router
+from backend.api.voice import router as voice_router
 from backend.database.config import SessionLocal
 from backend.database.models import Person, Crime, FIR, BankAccount, Transaction
 from backend.graph.service import get_graph_service
@@ -37,6 +41,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Stage C1 (Investigation Lifecycle) / Stage C2 (Conversation Memory) / Stage C5 (Board) / Stage C3 (Voice) — new, additive
+app.include_router(sessions_router)
+app.include_router(conversation_router)
+app.include_router(board_router)
+app.include_router(voice_router)
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +174,7 @@ async def ws_investigate(websocket: WebSocket):
         raw = await websocket.receive_text()
         payload = json.loads(raw)
         query = payload.get("query", "").strip()
+        session_id = payload.get("session_id")  # Stage C2, optional
         if not query:
             await websocket.send_json({"event_type": "error", "message": "Empty query."})
             return
@@ -171,7 +182,7 @@ async def ws_investigate(websocket: WebSocket):
         async def send(event: dict):
             await websocket.send_json(event)
 
-        await stream_investigation(query, send)
+        await stream_investigation(query, send, session_id=session_id)
 
     except WebSocketDisconnect:
         pass

@@ -2,6 +2,10 @@
 evidence had no home at all in the legacy schema (flagged as a gap in
 docs/DATABASE_ANALYSIS/06_SCHEMA_MIGRATION.md before this handover
 existed). Sources the SEIZED_AT and RECOVERED_FROM graph edges (Phase A5).
+
+Sprint B3 update: added a nullable `organization_id` — seized property
+can belong to an organization (a seized company asset) rather than only
+a person, needed by Organization Intelligence / Asset Link.
 """
 
 from datetime import datetime
@@ -24,12 +28,14 @@ class Property(Base):
     status = Column(Enum(PropertyStatus), nullable=False, default=PropertyStatus.SEIZED)
     seized_location_id = Column(Integer, ForeignKey("locations.id"), nullable=True, index=True)
     recovered_from_person_id = Column(Integer, ForeignKey("persons.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     custodian_officer_id = Column(Integer, ForeignKey("officers.id"), nullable=True, index=True)
     seized_date = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     fir = relationship("FIR", back_populates="properties")
     seized_location = relationship("Location")
     recovered_from_person = relationship("Person")
+    organization = relationship("Organization", back_populates="properties")
     custodian_officer = relationship("Officer", back_populates="property_in_custody")
 
     def __repr__(self):

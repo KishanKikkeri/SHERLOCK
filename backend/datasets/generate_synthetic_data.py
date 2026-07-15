@@ -43,6 +43,10 @@ from backend.database.models import (
     PersonAlias,
     Crime,
     FIR,
+    Officer,
+    Accused,
+    Victim,
+    Witness,
     PersonCrimeLink,
     Vehicle,
     Phone,
@@ -54,6 +58,7 @@ from backend.database.models import (
     FIRStatus,
     PersonRole,
     RelationType,
+    OfficerRank,
 )
 
 fake = Faker("en_IN")
@@ -215,7 +220,35 @@ def generate_assets(session, persons, mule_fraction=0.0, flagged_mule_set=None):
     return phones, vehicles, accounts
 
 
-def generate_crimes_and_firs(session, locations, persons, n_crimes, repeat_offender_pool):
+def generate_officers(session, n_officers=25):
+    """Stage A introduced `Officer` as a real entity and changed
+    `FIR.investigating_officer` (free string) to
+    `FIR.investigating_officer_id` (FK) — see fir.py's docstring. This
+    generator was never updated to match at the time, so every FIR
+    construction below was passing a string into a field that no longer
+    exists, which throws at insert time. Fixed here (Stage C1 validation
+    pass) since it blocks generating any dataset at all; no other Stage A
+    file is touched."""
+    ranks = [OfficerRank.SI, OfficerRank.ASI, OfficerRank.PI, OfficerRank.HEAD_CONSTABLE]
+    stations = ["MG Road PS", "Whitefield PS", "Jayanagar PS", "Mysuru City PS", "Hubballi PS"]
+    officers = []
+    for i in range(n_officers):
+        rank = random.choice(ranks)
+        name = f"{random.choice(['SI', 'CI', 'PSI', 'ASI'])} {fake.last_name_male()}"
+        officer = Officer(
+            name=name,
+            badge_number=f"KA-{1000 + i}",
+            rank=rank,
+            posting_station=random.choice(stations),
+            contact_number=fake.phone_number(),
+        )
+        officers.append(officer)
+    session.add_all(officers)
+    session.flush()
+    return officers
+
+
+def generate_crimes_and_firs(session, locations, persons, n_crimes, repeat_offender_pool, officers=None):
     crimes, firs, links = [], [], []
     crime_types = list(CRIME_TYPE_WEIGHTS.keys())
     crime_weights = list(CRIME_TYPE_WEIGHTS.values())
@@ -252,13 +285,25 @@ def generate_crimes_and_firs(session, locations, persons, n_crimes, repeat_offen
                 weights=[0.25, 0.35, 0.2, 0.1, 0.1],
                 k=1,
             )[0],
-            investigating_officer=f"{random.choice(['SI', 'CI', 'PSI'])} {fake.last_name_male()}",
+            investigating_officer_id=random.choice(officers).id if officers else None,
             filed_date=timestamp + timedelta(days=random.randint(0, 3)),
         )
         firs.append(fir)
         session.add(fir)
+        session.flush()  # need fir.id for Accused/Victim/Witness below
 
         # --- Accused: bias toward repeat-offender pool for theft/burglary ---
+        #
+        # BUGFIX (Stage C0): this used to construct `PersonCrimeLink(...)`
+        # directly, which is exactly the anti-pattern compat.py's own
+        # docstring warns against — "nothing should ever INSERT into
+        # PersonCrimeLink directly... it has no loader of its own." Doing
+        # so skipped the after_insert sync entirely, leaving
+        # source_table/source_id NULL and throwing IntegrityError on
+        # every accused/victim/witness row. Fixed by writing the real AER
+        # entities (Accused/Victim/Witness) below and letting the sync in
+        # compat.py auto-populate `person_crime_links`, same as every
+        # other write path in the system.
         n_accused = 1 if random.random() < 0.7 else 2
         if ctype in (CrimeType.THEFT, CrimeType.BURGLARY) and random.random() < 0.6:
             accused_pool_choices = random.sample(repeat_offender_pool, k=min(n_accused, len(repeat_offender_pool)))
@@ -267,31 +312,33 @@ def generate_crimes_and_firs(session, locations, persons, n_crimes, repeat_offen
 
         for accused in accused_pool_choices:
             raw_name = _pick_raw_name(session, accused)
-            links.append(PersonCrimeLink(
-                person_id=accused.id, crime_id=crime.id,
-                role=PersonRole.ACCUSED, raw_name_used=raw_name,
-            ))
+            session.add(Accused(person_id=accused.id, fir_id=fir.id, raw_name_used=raw_name))
 
         # --- Victim (skip for drug trafficking, which is victimless) ---
         if ctype != CrimeType.DRUG_TRAFFICKING:
             victim = random.choice(persons)
             raw_name = _pick_raw_name(session, victim)
-            links.append(PersonCrimeLink(
-                person_id=victim.id, crime_id=crime.id,
-                role=PersonRole.VICTIM, raw_name_used=raw_name,
-            ))
+            session.add(Victim(person_id=victim.id, fir_id=fir.id, raw_name_used=raw_name))
 
         # --- Occasional witness ---
         if random.random() < 0.3:
             witness = random.choice(persons)
             raw_name = _pick_raw_name(session, witness)
-            links.append(PersonCrimeLink(
-                person_id=witness.id, crime_id=crime.id,
-                role=PersonRole.WITNESS, raw_name_used=raw_name,
-            ))
+            session.add(Witness(person_id=witness.id, fir_id=fir.id, raw_name_used=raw_name))
 
-    session.add_all(links)
-    session.flush()
+        session.flush()  # fire the after_insert sync for this crime's rows before moving on
+
+    # `links` used to be built up manually alongside the loop above; now
+    # that Accused/Victim/Witness are real rows, read back the
+    # compat-layer projection the sync just populated — same return
+    # shape (.person_id/.crime_id/.role) that generate_associations()
+    # below already expects, so that function needed no changes.
+    crime_ids = [c.id for c in crimes]
+    links = (
+        session.query(PersonCrimeLink)
+        .filter(PersonCrimeLink.crime_id.in_(crime_ids))
+        .all()
+    )
     return crimes, firs, links
 
 
@@ -345,7 +392,7 @@ def generate_associations(session, persons, links):
     return associations
 
 
-def generate_fraud_ring(session, locations, persons, ring_size=8):
+def generate_fraud_ring(session, locations, persons, ring_size=8, officers=None):
     """
     Inject a money-mule fraud ring:
       - `ring_size` persons each get a flagged bank account.
@@ -412,16 +459,16 @@ def generate_fraud_ring(session, locations, persons, ring_size=8):
         crime_id=crime.id,
         fir_number=f"FIR-{location.district[:3].upper()}-{REFERENCE_DATE.year}-{crime.id:05d}",
         status=FIRStatus.UNDER_INVESTIGATION,
-        investigating_officer=f"CI {fake.last_name_male()}",
+        investigating_officer_id=random.choice(officers).id if officers else None,
         filed_date=crime.timestamp + timedelta(days=1),
     )
     session.add(fir)
+    session.flush()  # need fir.id for the Accused row below
 
-    link = PersonCrimeLink(
-        person_id=hub_person.id, crime_id=crime.id,
-        role=PersonRole.ACCUSED, raw_name_used=hub_person.name,
-    )
-    session.add(link)
+    # BUGFIX (Stage C0): was a direct `PersonCrimeLink(...)` insert — same
+    # anti-pattern fixed in generate_crimes_and_firs above. Write the real
+    # Accused row and let compat.py's sync populate person_crime_links.
+    session.add(Accused(person_id=hub_person.id, fir_id=fir.id, raw_name_used=hub_person.name))
     session.flush()
 
     return hub_person
@@ -459,19 +506,22 @@ def main():
         print("Generating phones, vehicles, bank accounts...")
         generate_assets(session, persons)
 
+        print("Generating officers...")
+        officers = generate_officers(session)
+
         # Repeat offender pool: ~5% of persons
         pool_size = max(5, args.persons // 20)
         repeat_offender_pool = random.sample(persons, pool_size)
         print(f"Designated {pool_size} persons as the repeat-offender pool.")
 
         print(f"Generating {args.crimes} crimes + FIRs + person links...")
-        crimes, firs, links = generate_crimes_and_firs(session, locations, persons, args.crimes, repeat_offender_pool)
+        crimes, firs, links = generate_crimes_and_firs(session, locations, persons, args.crimes, repeat_offender_pool, officers=officers)
 
         print("Generating person associations (co-accused + social ties)...")
         generate_associations(session, persons, links)
 
         print(f"Injecting money-mule fraud ring (size={args.ring_size})...")
-        hub = generate_fraud_ring(session, locations, persons, args.ring_size)
+        hub = generate_fraud_ring(session, locations, persons, args.ring_size, officers=officers)
         print(f"  -> Hub account owner: {hub.name} (person_id={hub.id})")
 
         session.commit()

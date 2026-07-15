@@ -18,6 +18,13 @@ class SherlockState(TypedDict, total=False):
     query: str
     conversation_id: str
 
+    # Stage C1/C2 — optional; every existing caller that omits these keeps
+    # working exactly as before (TypedDict total=False, no reducer changes
+    # to any pre-existing key above).
+    session_id: int             # InvestigationSession.id this turn belongs to, if any
+    raw_query: str              # the query as typed/spoken, before reference resolution
+    resolved_query: str         # query after Stage C2 pronoun/reference resolution
+
     investigation_plan: dict          # set once by Chief (plan step)
     active_agents: list                # list[str] — which specialists to run
 

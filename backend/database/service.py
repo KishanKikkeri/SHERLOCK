@@ -23,10 +23,14 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from datetime import datetime
+
 from backend.database.models import (
     Person, Location, Crime, FIR, Accused, Victim, Witness, Officer,
     BankAccount, Transaction, Vehicle, Phone, Property, PersonCrimeLink,
     PersonRole,
+    InvestigationSession, SessionAssignment, SessionActivity,
+    InvestigationSessionStatus, InvestigationPriority,
 )
 
 
@@ -149,3 +153,184 @@ class DatabaseService:
         if fir_id is not None:
             query = query.filter_by(fir_id=fir_id)
         return query.all()
+
+    # -- Investigation Sessions (Stage C1) ---------------------------------
+    #
+    # "Sherlock, open a new case" and friends. These methods are the only
+    # place that writes InvestigationSession/SessionAssignment/SessionActivity
+    # rows — mirrors this file's own rule ("agents never do SQL directly")
+    # for the new lifecycle tables, and every state transition also appends
+    # a SessionActivity row so the session has a real audit trail from day one.
+
+    def _next_session_code(self) -> str:
+        year = datetime.utcnow().year
+        count = self.session.query(InvestigationSession).count() + 1
+        return f"SESSION-{year}-{count:04d}"
+
+    def _log_activity(self, session_row: InvestigationSession, event_type: str,
+                       actor_officer_id: int | None = None, detail: str | None = None) -> None:
+        self.session.add(SessionActivity(
+            session_id=session_row.id,
+            event_type=event_type,
+            actor_officer_id=actor_officer_id,
+            detail=detail,
+        ))
+
+    def open_case(self, title: str, fir_id: int | None = None,
+                  opened_by_officer_id: int | None = None,
+                  priority=None, notes: str | None = None) -> InvestigationSession:
+        """'Sherlock, open a new case.' Creates the session and its first
+        audit-trail entry in one transaction."""
+        row = InvestigationSession(
+            session_code=self._next_session_code(),
+            title=title,
+            fir_id=fir_id,
+            status=InvestigationSessionStatus.OPEN,
+            priority=priority or InvestigationPriority.MEDIUM,
+            opened_by_officer_id=opened_by_officer_id,
+            owner_officer_id=opened_by_officer_id,
+            notes=notes,
+        )
+        self.session.add(row)
+        self.session.flush()  # need row.id for the activity FK
+        self._log_activity(row, "opened", opened_by_officer_id, detail=f"Session opened: {title}")
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def get_session(self, session_id: int) -> InvestigationSession | None:
+        return self.session.get(InvestigationSession, session_id)
+
+    def get_session_by_code(self, session_code: str) -> InvestigationSession | None:
+        return self.session.query(InvestigationSession).filter_by(session_code=session_code).first()
+
+    def list_sessions(self, status=None, owner_officer_id: int | None = None) -> list[InvestigationSession]:
+        query = self.session.query(InvestigationSession)
+        if status is not None:
+            query = query.filter_by(status=status)
+        if owner_officer_id is not None:
+            query = query.filter_by(owner_officer_id=owner_officer_id)
+        return query.order_by(InvestigationSession.updated_at.desc()).all()
+
+    def close_case(self, session_id: int, actor_officer_id: int | None = None,
+                    detail: str | None = None) -> InvestigationSession | None:
+        row = self.get_session(session_id)
+        if row is None:
+            return None
+        row.status = InvestigationSessionStatus.CLOSED
+        row.closed_at = datetime.utcnow()
+        self._log_activity(row, "closed", actor_officer_id, detail)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def reopen_case(self, session_id: int, actor_officer_id: int | None = None,
+                     detail: str | None = None) -> InvestigationSession | None:
+        row = self.get_session(session_id)
+        if row is None:
+            return None
+        if row.status == InvestigationSessionStatus.ARCHIVED:
+            raise ValueError("Cannot reopen an archived session — archiving is terminal. "
+                              "Open a new session against the same FIR instead.")
+        row.status = InvestigationSessionStatus.REOPENED
+        row.reopened_at = datetime.utcnow()
+        row.closed_at = None
+        self._log_activity(row, "reopened", actor_officer_id, detail)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def archive_case(self, session_id: int, actor_officer_id: int | None = None,
+                      detail: str | None = None) -> InvestigationSession | None:
+        row = self.get_session(session_id)
+        if row is None:
+            return None
+        row.status = InvestigationSessionStatus.ARCHIVED
+        row.archived_at = datetime.utcnow()
+        self._log_activity(row, "archived", actor_officer_id, detail)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def update_session_metadata(self, session_id: int, actor_officer_id: int | None = None,
+                                 title: str | None = None, priority=None,
+                                 notes: str | None = None) -> InvestigationSession | None:
+        row = self.get_session(session_id)
+        if row is None:
+            return None
+        changed = []
+        if title is not None:
+            row.title = title
+            changed.append("title")
+        if priority is not None:
+            row.priority = priority
+            changed.append("priority")
+        if notes is not None:
+            row.notes = notes
+            changed.append("notes")
+        if changed:
+            self._log_activity(row, "metadata_changed", actor_officer_id, detail=f"Changed: {', '.join(changed)}")
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def assign_investigator(self, session_id: int, officer_id: int, role: str = "investigator",
+                             actor_officer_id: int | None = None) -> SessionAssignment | None:
+        session_row = self.get_session(session_id)
+        if session_row is None:
+            return None
+        assignment = SessionAssignment(session_id=session_id, officer_id=officer_id, role=role)
+        self.session.add(assignment)
+        self._log_activity(session_row, "assigned", actor_officer_id,
+                            detail=f"Officer {officer_id} assigned as {role}")
+        self.session.commit()
+        self.session.refresh(assignment)
+        return assignment
+
+    def unassign_investigator(self, session_id: int, officer_id: int,
+                               actor_officer_id: int | None = None) -> bool:
+        session_row = self.get_session(session_id)
+        if session_row is None:
+            return False
+        assignment = (
+            self.session.query(SessionAssignment)
+            .filter_by(session_id=session_id, officer_id=officer_id, unassigned_at=None)
+            .first()
+        )
+        if assignment is None:
+            return False
+        assignment.unassigned_at = datetime.utcnow()
+        self._log_activity(session_row, "unassigned", actor_officer_id,
+                            detail=f"Officer {officer_id} unassigned")
+        self.session.commit()
+        return True
+
+    def get_session_activity(self, session_id: int) -> list[SessionActivity]:
+        return (
+            self.session.query(SessionActivity)
+            .filter_by(session_id=session_id)
+            .order_by(SessionActivity.created_at)
+            .all()
+        )
+
+    # -- Stage C3 (Voice) read helpers ---------------------------------
+    #
+    # Small, real lookups the voice command router needs — kept here
+    # rather than in the router module per this file's own rule that
+    # DatabaseService is the only class allowed to know SQL.
+
+    def find_officer_by_name(self, name_fragment: str) -> Officer | None:
+        """Case-insensitive substring match against Officer.name — e.g.
+        "Inspector Ravi" -> matches an Officer named "Insp. Ravi Kumar".
+        Returns the first match; ambiguity (two officers named Ravi) is
+        not disambiguated here, same honesty note as Stage C2's pronoun
+        resolution."""
+        return (
+            self.session.query(Officer)
+            .filter(Officer.name.ilike(f"%{name_fragment}%"))
+            .first()
+        )
+
+    def find_vehicles_by_fir(self, fir_id: int):
+        from backend.database.models import Vehicle
+        return self.session.query(Vehicle).filter_by(used_in_fir_id=fir_id).all()

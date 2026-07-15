@@ -14,7 +14,9 @@ import logging
 
 from backend.api.events import EventType, make_event
 from backend.database.config import SessionLocal
+from backend.database.service import DatabaseService
 from backend.graph.service import get_graph_service
+from backend.memory.conversation_memory import ConversationMemoryService
 from backend.orchestrator.graph import build_investigation_graph
 
 logger = logging.getLogger(__name__)
@@ -44,24 +46,50 @@ NODE_LABELS = {
 }
 
 
-async def stream_investigation(query: str, send):
+async def stream_investigation(query: str, send, session_id: int | None = None):
     """
     Run the investigation pipeline and call `send(event_dict)` after each
     node. `send` is an async callable (WebSocket.send_json or an SSE helper).
 
     Builds a fresh DB session and graph service per investigation so
     concurrent requests don't share state.
+
+    `session_id` (Stage C2, optional): if provided, this must be an
+    existing InvestigationSession id. The raw query is resolved against
+    that session's conversation memory ("expand his network" ->
+    "expand Ravi Kumar's network") before being handed to the Chief, and
+    the finished turn is persisted so the next turn on the same session
+    can resolve against it too. Omitting session_id (existing callers,
+    e.g. demo scripts) behaves exactly as before this sprint.
     """
     await send(make_event(EventType.INVESTIGATION_STARTED, message=f"Investigation started: {query}"))
 
     session = SessionLocal()
     try:
+        memory = ConversationMemoryService(session) if session_id is not None else None
+        resolved_query = query
+        if memory is not None:
+            db = DatabaseService(session)
+            if db.get_session(session_id) is None:
+                await send(make_event(EventType.ERROR, message=f"Unknown session_id {session_id}."))
+                return
+            resolved_query = memory.resolve_query(session_id, query)
+            if resolved_query != query:
+                await send(make_event(
+                    EventType.AGENT_COMPLETED,
+                    agent="Conversation Memory",
+                    message=f'Resolved "{query}" -> "{resolved_query}" from session history.',
+                ))
+
         graph_service = get_graph_service(backend="networkx", session=session)
         graph = build_investigation_graph(session, graph_service)
 
         initial_state = {
-            "query": query,
+            "query": resolved_query,
+            "raw_query": query,
+            "resolved_query": resolved_query,
             "conversation_id": "live",
+            "session_id": session_id,
             "investigation_plan": {},
             "active_agents": [],
             "findings": [],
@@ -118,8 +146,35 @@ async def stream_investigation(query: str, send):
                 data={"final_report": combined_report},
             ))
 
+            if memory is not None:
+                memory.record_turn(session_id, raw_query=query, resolved_query=resolved_query,
+                                    final_state=final_state)
+
     except Exception as e:
         logger.exception("Investigation pipeline failed for query: %r", query)
         await send(make_event(EventType.ERROR, message=str(e)))
     finally:
         session.close()
+
+
+async def run_investigation_once(query: str, session_id: int | None = None) -> dict:
+    """Convenience wrapper for callers that just want the finished
+    report, not a live event feed — e.g. Stage C3's voice command router,
+    which needs one synchronous-feeling result to hand back to the
+    browser's TTS. Internally just drains `stream_investigation`'s events
+    and returns the `report_ready` payload (or raises on `error`)."""
+    events = []
+
+    async def collect(event: dict):
+        events.append(event)
+
+    await stream_investigation(query, collect, session_id=session_id)
+
+    error = next((e for e in events if e.get("event_type") == "error"), None)
+    if error:
+        raise RuntimeError(error.get("message", "Investigation failed."))
+
+    report_event = next((e for e in events if e.get("event_type") == "report_ready"), None)
+    if report_event is None:
+        raise RuntimeError("Investigation did not produce a final report.")
+    return report_event["data"]["final_report"]

@@ -41,6 +41,7 @@ from backend.database.models.enums import (  # noqa: F401
     Gender, CrimeType, FIRStatus, PersonRole, RelationType,
     OfficerRank, CourtLevel, PropertyStatus, ArrestStatus,
     ChargeSheetStatus, OrganizationType, WeaponType,
+    InvestigationSessionStatus, InvestigationPriority,
 )
 
 # Core identity + compatibility tables (compat.py must load before
@@ -72,9 +73,16 @@ from backend.database.models.vehicle import Vehicle  # noqa: F401
 from backend.database.models.phone import Phone, CallRecord  # noqa: F401
 from backend.database.models.bank_account import BankAccount, Transaction  # noqa: F401
 from backend.database.models.organization import Organization  # noqa: F401
+from backend.database.models.organization_membership import OrganizationMembership  # noqa: F401
 
 # Relationships table (network graph, not case-role)
 from backend.database.models.person_association import PersonAssociation  # noqa: F401
+
+# Stage C1 — Investigation Lifecycle / Stage C2 — Conversation Memory (new, additive)
+from backend.database.models.investigation_session import (  # noqa: F401
+    InvestigationSession, SessionAssignment, SessionActivity,
+)
+from backend.database.models.conversation import ConversationTurn  # noqa: F401
 
 from sqlalchemy.orm import configure_mappers
 
@@ -86,10 +94,14 @@ __all__ = [
     "Gender", "CrimeType", "FIRStatus", "PersonRole", "RelationType",
     "OfficerRank", "CourtLevel", "PropertyStatus", "ArrestStatus",
     "ChargeSheetStatus", "OrganizationType", "WeaponType",
+    "InvestigationSessionStatus", "InvestigationPriority",
     # Legacy-compatible symbols (imported by existing agents/graph builders/datasets)
     "Person", "Location", "Crime", "FIR", "Vehicle", "Phone", "BankAccount",
     "Transaction", "PersonCrimeLink", "PersonAssociation", "PersonAlias",
     # New AER entities
     "Officer", "Accused", "Victim", "Witness", "Investigation", "Arrest",
     "ChargeSheet", "Court", "Property", "Weapon", "Organization", "CallRecord",
+    "OrganizationMembership",
+    # Stage C1/C2 — new, additive
+    "InvestigationSession", "SessionAssignment", "SessionActivity", "ConversationTurn",
 ]

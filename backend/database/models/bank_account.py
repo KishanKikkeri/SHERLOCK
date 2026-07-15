@@ -6,6 +6,11 @@ addition — it's not in the handover's Phase A1 file list (only
 (backend/agents/financial/agent.py) directly queries `Transaction` and
 the handover's own Golden Rule requires it to keep working unmodified, so
 dropping this table was not an option.
+
+Sprint B3 update: added a nullable `organization_id` on BankAccount so an
+account can belong to an organization instead of / in addition to a
+person (a shell company's account, for example) — needed by Organization
+Intelligence. Nullable and additive; every existing query is unaffected.
 """
 
 from datetime import datetime
@@ -23,9 +28,11 @@ class BankAccount(Base):
     bank = Column(String, nullable=False)
     account_number = Column(String, nullable=False, unique=True)
     owner_id = Column(Integer, ForeignKey("persons.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     is_flagged_mule = Column(Boolean, nullable=False, default=False, index=True)
 
     owner = relationship("Person", back_populates="bank_accounts")
+    organization = relationship("Organization", back_populates="bank_accounts")
     sent_transactions = relationship(
         "Transaction", foreign_keys="Transaction.sender_account_id", back_populates="sender_account"
     )
