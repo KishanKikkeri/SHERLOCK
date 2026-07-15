@@ -1,8 +1,9 @@
 """
-SHERLOCK — Evidence Validation Agent (Phase 5).
+SHERLOCK — Evidence Validation Agent.
 
-The mandatory checkpoint. Always runs, regardless of the investigation
-plan. Applies three rules to every finding accumulated in `state["findings"]`:
+Phase 5 baseline (unchanged): the mandatory checkpoint. Always runs,
+regardless of the investigation plan. Applies three rules to every
+finding accumulated in `state["findings"]`:
 
     no evidence       -> rejected  (validated=False)
     confidence < 0.6   -> flagged   (validated=True, but noted as low confidence)
@@ -11,10 +12,19 @@ plan. Applies three rules to every finding accumulated in `state["findings"]`:
 Writes the fully annotated list to `validated_findings` (overwrite field —
 this is the version the Chief reads for synthesis), and also emits its own
 `validation_summary` AgentFinding for the activity feed / audit trail.
+
+Sprint B5 upgrade (Stage B Division 15, "Explainability"): this is also
+where every finding gets its `reasoning` / `supporting_graph` /
+`related_documents` populated (see base/explainability.py's docstring
+for why here, not in each producing agent). Chosen specifically because
+this node already iterates every finding regardless of source — adding
+one function call here reaches all ~30 finding_types across every agent,
+current and future, without editing 16 separate agent files.
 """
 
 from backend.agents.base.agent import BaseAgent
 from backend.agents.base.finding import AgentFinding
+from backend.agents.base import explainability
 
 MIN_CONFIDENCE = 0.6
 
@@ -42,7 +52,12 @@ class EvidenceValidationAgent(BaseAgent):
                 f["validated"] = True
                 f["validation_notes"] = "validated"
                 accepted += 1
-            annotated.append(f)
+
+            # Sprint B5: enrich every finding with explainability fields,
+            # rejected ones included — an investigator should still be able
+            # to see *why* something was rejected, not just that it was.
+            enriched = explainability.enrich(AgentFinding.from_dict(f))
+            annotated.append(enriched.to_dict())
 
         summary_finding = AgentFinding(
             agent_name=self.name,
@@ -58,6 +73,7 @@ class EvidenceValidationAgent(BaseAgent):
             validated=True,
             validation_notes="validated",
         )
+        explainability.enrich(summary_finding)
         annotated.append(summary_finding.to_dict())
 
         return [summary_finding], {"validated_findings": annotated}

@@ -18,6 +18,11 @@ FINANCIAL_KEYWORDS = ["money", "transaction", "account", "financial", "fraud", "
 FORECAST_KEYWORDS = ["forecast", "future", "predict", "hotspot", "next"]
 FESTIVAL_KEYWORDS = ["festival", "dasara", "diwali", "seasonal", "season"]
 REPEAT_KEYWORDS = ["repeat", "habitual", "recurring", "serial"]
+# Sprint B2: Investigation Assignment answers a different question ("who
+# should get this case") than every other agent ("what do we know about
+# this case") — gated on explicit assignment intent rather than run
+# unconditionally, unlike the Sprint B1/B2/B3 case-scoped agents below.
+ASSIGNMENT_KEYWORDS = ["assign", "who should investigate", "which officer", "recommend an officer", "reassign"]
 
 
 def extract_filters(query: str) -> dict:
@@ -44,6 +49,7 @@ def extract_filters(query: str) -> dict:
         "wants_forecast": any(k in q for k in FORECAST_KEYWORDS),
         "wants_repeat_offenders": any(k in q for k in REPEAT_KEYWORDS),
         "is_financial": any(k in q for k in FINANCIAL_KEYWORDS),
+        "wants_assignment": any(k in q for k in ASSIGNMENT_KEYWORDS),
     }
 
 
@@ -51,11 +57,30 @@ def plan_agents(filters: dict) -> dict:
     """Decide which specialist agents the investigation needs."""
     agents = ["CrimeRecords"]
 
-    # NetworkAnalysis, EntityResolution and TimelineReconstruction run for
-    # ALL investigation types — cheap, broadly useful, no filter gating needed.
+    # NetworkAnalysis, EntityResolution, TimelineReconstruction and (Sprint
+    # B1) CaseIntelligence run for ALL investigation types — cheap, broadly
+    # useful, no filter gating needed. CaseIntelligence specifically is
+    # "the core of every investigation" per the Stage B brief, so it's
+    # unconditional like the others, not filter-gated.
     agents.append("NetworkAnalysis")
     agents.append("EntityResolution")
     agents.append("TimelineReconstruction")
+    agents.append("CaseIntelligence")
+
+    # Sprint B2/B3: Officer/Witness/Property/Weapon/Organization Intelligence
+    # follow the same pattern as CaseIntelligence — scoped to whatever's
+    # already in graph_context, and every one of them returns a graceful
+    # "nothing on record" finding rather than an error when its data isn't
+    # present, so running them unconditionally costs almost nothing and
+    # avoids a second layer of filter-gating logic to keep in sync with
+    # what each agent actually needs.
+    agents.append("OfficerIntelligence")
+    agents.append("WitnessIntelligence")
+    agents.append("PropertyIntelligence")
+    agents.append("WeaponIntelligence")
+    agents.append("OrganizationIntelligence")
+    agents.append("BehavioralIntelligence")
+    agents.append("SociologicalIntelligence")
 
     if filters["is_financial"]:
         agents.append("FinancialAgent")
@@ -72,7 +97,14 @@ def plan_agents(filters: dict) -> dict:
     if filters["wants_forecast"]:
         agents.append("Forecasting")
 
+    # Sprint B2: Investigation Assignment — distinct question, gated separately
+    if filters["wants_assignment"]:
+        agents.append("InvestigationAssignment")
+
     # Prevention Intelligence always fires — converts findings into actions
     agents.append("PreventionAgent")
+    # Sprint B5: Decision Support always fires too — same "always useful,
+    # degrades gracefully" reasoning as the Sprint B1-B4 case-scoped agents
+    agents.append("DecisionSupport")
 
     return {"agents": agents, "filters": filters}
