@@ -50,6 +50,14 @@ class InvestigationSession(Base):
 
     notes = Column(Text, nullable=True)
 
+    # Stage C2 (Sprint 2): rolling compressed summary of turns older than
+    # `context_summary_through_turn`, so a long session's prompt context
+    # doesn't grow unboundedly. The full per-turn rows in `conversation_turns`
+    # are NEVER deleted or altered by this — this is purely a compressed
+    # *view* used when building prompt context; database history stays complete.
+    context_summary = Column(Text, nullable=True)
+    context_summary_through_turn = Column(Integer, nullable=True)  # highest turn_index folded into context_summary
+
     fir = relationship("FIR")
     opened_by = relationship("Officer", foreign_keys=[opened_by_officer_id])
     owner = relationship("Officer", foreign_keys=[owner_officer_id])

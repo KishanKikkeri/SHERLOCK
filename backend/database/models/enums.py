@@ -137,3 +137,44 @@ class InvestigationPriority(str, enum.Enum):
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
+
+
+# ---------------------------------------------------------------------------
+# Stage C6 — Collaboration (new, additive; nothing above is touched)
+# ---------------------------------------------------------------------------
+
+class ReviewStatus(str, enum.Enum):
+    """Status of one review cycle on a session's work-so-far. A session
+    can go through more than one review cycle (e.g. rejected, revised,
+    re-submitted) — see ReviewRequest's own docstring for why each cycle
+    is its own row rather than a single status column."""
+    DRAFT = "draft"
+    IN_REVIEW = "in_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class NotificationType(str, enum.Enum):
+    ASSIGNMENT = "assignment"
+    MENTION = "mention"
+    REVIEW_REQUEST = "review_request"
+    REVIEW_DECISION = "review_decision"
+    BOARD_UPDATE = "board_update"
+
+
+class CommentTargetType(str, enum.Enum):
+    FINDING = "finding"
+    EVIDENCE = "evidence"
+    ENTITY = "entity"
+    BOARD_OBJECT = "board_object"
+
+
+class BoardObjectType(str, enum.Enum):
+    NOTE = "note"
+    LINK = "link"
+    HYPOTHESIS = "hypothesis"
+
+
+class PresenceStatus(str, enum.Enum):
+    VIEWING = "viewing"
+    EDITING = "editing"

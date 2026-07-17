@@ -53,6 +53,32 @@ class ConversationTurn(Base):
     # turn, same lifecycle as everything else on this row.
     findings_json = Column(Text, nullable=True)
 
+    # Stage C2 (Sprint 2, disambiguation): every distinct entity mentioned
+    # in this turn's findings, not just the "last" one — JSON list of
+    # {"kind": "person"|"fir"|"account"|"organization"|"property"|"weapon",
+    # "id": int, "label": str}, in agent execution order. `last_person_id`
+    # etc. above stay as-is (still what `resolve_query` substitutes with
+    # when there's no ambiguity) — this is the superset used to *detect*
+    # ambiguity and to answer "which one" questions.
+    entity_mentions_json = Column(Text, nullable=True)
+
+    # Stage C2 (Sprint 2): set when this turn resolved to a clarification
+    # question instead of running the investigation pipeline, e.g. "Show
+    # Ravi and Manoj" -> "Tell me about him" is ambiguous. JSON:
+    # {"question": str, "reference": str, "options": [{"id","kind","label"}]}.
+    # The *next* turn checks this (see resolve_query) before falling back
+    # to normal pronoun resolution, so answering "Ravi" or "the first one"
+    # resolves the pending question rather than being treated as a new,
+    # unrelated query.
+    pending_clarification_json = Column(Text, nullable=True)
+
+    # Stage C2 (Sprint 2): reset phrase matched ("forget the previous
+    # topic", "new investigation", ...) if this turn explicitly reset
+    # conversational context, else NULL. Downstream reference resolution
+    # treats this turn as if it were turn_index 0 for pronoun/clarification
+    # purposes, without opening a new InvestigationSession.
+    topic_reset = Column(String, nullable=True)
+
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     session = relationship("InvestigationSession", back_populates="conversation_turns")

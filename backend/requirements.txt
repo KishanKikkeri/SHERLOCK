@@ -7,7 +7,11 @@ langgraph>=0.2
 langchain-anthropic>=0.2
 anthropic>=0.40
 fastapi>=0.110
+python-multipart>=0.0.9 # Stage D, Sprint 3 — required by FastAPI for UploadFile (audio) endpoints
 uvicorn[standard]>=0.29
 pydantic>=2.0
 chromadb>=0.5
 reportlab>=4.0          # PDF investigation report export
+requests>=2.31          # Stage D, Sprint 3 — outbound calls to pluggable cloud STT/TTS providers
+fonttools>=4.50         # Stage D, Sprint 4 — validates the bundled Kannada font's glyph coverage
+                        # (also used by validate_stage_d4.py; not required at runtime for PDF export itself)

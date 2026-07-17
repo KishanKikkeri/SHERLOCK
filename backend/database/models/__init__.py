@@ -42,6 +42,7 @@ from backend.database.models.enums import (  # noqa: F401
     OfficerRank, CourtLevel, PropertyStatus, ArrestStatus,
     ChargeSheetStatus, OrganizationType, WeaponType,
     InvestigationSessionStatus, InvestigationPriority,
+    ReviewStatus, NotificationType, CommentTargetType, BoardObjectType, PresenceStatus,
 )
 
 # Core identity + compatibility tables (compat.py must load before
@@ -84,6 +85,14 @@ from backend.database.models.investigation_session import (  # noqa: F401
 )
 from backend.database.models.conversation import ConversationTurn  # noqa: F401
 
+# Stage C4 — AI Discussion Mode (new, additive)
+from backend.database.models.discussion import DiscussionRecord  # noqa: F401
+
+# Stage C6 — Collaboration (new, additive)
+from backend.database.models.collaboration import (  # noqa: F401
+    BoardObject, Comment, Notification, ReviewRequest, SessionPresence,
+)
+
 from sqlalchemy.orm import configure_mappers
 
 configure_mappers()
@@ -95,6 +104,7 @@ __all__ = [
     "OfficerRank", "CourtLevel", "PropertyStatus", "ArrestStatus",
     "ChargeSheetStatus", "OrganizationType", "WeaponType",
     "InvestigationSessionStatus", "InvestigationPriority",
+    "ReviewStatus", "NotificationType", "CommentTargetType", "BoardObjectType", "PresenceStatus",
     # Legacy-compatible symbols (imported by existing agents/graph builders/datasets)
     "Person", "Location", "Crime", "FIR", "Vehicle", "Phone", "BankAccount",
     "Transaction", "PersonCrimeLink", "PersonAssociation", "PersonAlias",
@@ -104,4 +114,8 @@ __all__ = [
     "OrganizationMembership",
     # Stage C1/C2 — new, additive
     "InvestigationSession", "SessionAssignment", "SessionActivity", "ConversationTurn",
+    # Stage C4 — new, additive
+    "DiscussionRecord",
+    # Stage C6 — new, additive
+    "BoardObject", "Comment", "Notification", "ReviewRequest", "SessionPresence",
 ]

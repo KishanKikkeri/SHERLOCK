@@ -16,17 +16,20 @@ from fastapi import Body, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response as FastAPIResponse
 
-from backend.api.investigation_stream import stream_investigation
+from backend.api.investigation_stream import stream_investigation, run_investigation_once
 from backend.api.sessions import router as sessions_router
 from backend.api.conversation import router as conversation_router
 from backend.api.board import router as board_router
 from backend.api.voice import router as voice_router
+from backend.api.discussion import router as discussion_router
+from backend.api.collaboration import router as collaboration_router
+from backend.api.language import router as language_router
 from backend.database.config import SessionLocal
 from backend.database.models import Person, Crime, FIR, BankAccount, Transaction
 from backend.graph.service import get_graph_service
 from backend.graph.schema import node_key
 from backend.logging_config import configure_logging
-from backend.reporting.pdf_export import generate_investigation_pdf
+from backend.reporting.pdf_export import generate_investigation_pdf, pdf_export_warnings
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -42,11 +45,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Stage C1 (Investigation Lifecycle) / Stage C2 (Conversation Memory) / Stage C5 (Board) / Stage C3 (Voice) — new, additive
+# Stage C1 (Investigation Lifecycle) / Stage C2 (Conversation Memory) / Stage C5 (Board) / Stage C3 (Voice) / Stage C4 (Discussion) / Stage C6 (Collaboration) — new, additive
 app.include_router(sessions_router)
 app.include_router(conversation_router)
 app.include_router(board_router)
 app.include_router(voice_router)
+app.include_router(discussion_router)
+app.include_router(collaboration_router)
+
+# Stage D (Language Intelligence) — new, additive
+app.include_router(language_router)
 
 
 # ---------------------------------------------------------------------------
@@ -175,6 +183,8 @@ async def ws_investigate(websocket: WebSocket):
         payload = json.loads(raw)
         query = payload.get("query", "").strip()
         session_id = payload.get("session_id")  # Stage C2, optional
+        enable_discussion = bool(payload.get("enable_discussion", False))  # Stage C4, optional
+        language = payload.get("language")  # Stage D, Sprint 2, optional — e.g. "kn". Auto-detected if omitted.
         if not query:
             await websocket.send_json({"event_type": "error", "message": "Empty query."})
             return
@@ -182,7 +192,8 @@ async def ws_investigate(websocket: WebSocket):
         async def send(event: dict):
             await websocket.send_json(event)
 
-        await stream_investigation(query, send, session_id=session_id)
+        await stream_investigation(query, send, session_id=session_id,
+                                    enable_discussion=enable_discussion, language=language)
 
     except WebSocketDisconnect:
         pass
@@ -201,6 +212,47 @@ async def ws_investigate(websocket: WebSocket):
 
 
 # ---------------------------------------------------------------------------
+# Non-streaming investigation endpoint (Stage D, Sprint 2)
+# ---------------------------------------------------------------------------
+
+@app.post("/investigate")
+async def investigate(payload: dict = Body(...)):
+    """
+    Non-streaming counterpart to `/ws/investigate`, added for Stage D so
+    the multilingual pipeline has a plain request/response shape to test
+    and integrate against (the handover's own example payload):
+
+        POST /investigate
+        { "query": "...", "language": "kn" }
+
+    `language` is optional; omitted or "en" behaves exactly like the
+    existing English-only pipeline. `/ws/investigate` remains the
+    primary, live-streaming entry point — this endpoint just drains the
+    same event stream server-side (via `run_investigation_once`) and
+    returns the finished report, for callers that don't want a
+    WebSocket (e.g. simple scripts, curl, future non-streaming clients).
+    """
+    query = (payload.get("query") or "").strip()
+    session_id = payload.get("session_id")
+    language = payload.get("language")
+
+    if not query:
+        raise HTTPException(status_code=422, detail="query is required.")
+    if language is not None and language not in ("en", "kn"):
+        raise HTTPException(status_code=422, detail="language must be 'en' or 'kn' if provided.")
+
+    try:
+        final_report = await run_investigation_once(query, session_id=session_id, language=language)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("POST /investigate failed for query: %r", query)
+        raise HTTPException(status_code=500, detail="Investigation failed.")
+
+    return {"query": query, "language": language or "en", "final_report": final_report}
+
+
+# ---------------------------------------------------------------------------
 # PDF Export
 # ---------------------------------------------------------------------------
 
@@ -209,29 +261,46 @@ async def export_pdf(payload: dict = Body(...)):
     """
     Generate a PDF investigation report from a completed final_report.
 
-    Body: { "final_report": {...}, "audit_trail": [...], "case_id": "..." }
+    Body: { "final_report": {...}, "audit_trail": [...], "case_id": "...", "language": "kn" }
     Returns: application/pdf binary
+
+    `language` (Stage D, Sprint 4, optional): "en" (default, unchanged
+    pre-Sprint-4 behavior), "kn", or "bilingual". If a Kannada PDF is
+    requested but can't actually be produced (Kannada font missing on
+    this server, or `final_report` has no `localized` block because the
+    investigation didn't run with `language="kn"`), the endpoint still
+    returns 200 with a valid English PDF — degrading gracefully rather
+    than failing the whole export — and explains why via the
+    `X-PDF-Warnings` response header.
     """
     final_report = payload.get("final_report") or {}
     audit_trail  = payload.get("audit_trail")  or []
     case_id      = payload.get("case_id")
+    language     = payload.get("language") or "en"
 
     if not isinstance(final_report, dict):
         raise HTTPException(status_code=422, detail="final_report must be an object.")
     if not isinstance(audit_trail, list):
         raise HTTPException(status_code=422, detail="audit_trail must be an array.")
+    if language not in ("en", "kn", "bilingual"):
+        raise HTTPException(status_code=422, detail="language must be one of 'en', 'kn', 'bilingual'.")
 
     try:
-        pdf_bytes = generate_investigation_pdf(final_report, audit_trail, case_id)
+        pdf_bytes = generate_investigation_pdf(final_report, audit_trail, case_id, language=language)
     except Exception:
         logger.exception("PDF export failed for case_id=%r", case_id)
         raise HTTPException(status_code=500, detail="PDF generation failed.")
 
+    headers = {
+        "Content-Disposition": f'attachment; filename="SHERLOCK-{case_id or "report"}.pdf"',
+        "Content-Length": str(len(pdf_bytes)),
+    }
+    warnings = pdf_export_warnings(final_report, language)
+    if warnings:
+        headers["X-PDF-Warnings"] = " | ".join(warnings)
+
     return FastAPIResponse(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="SHERLOCK-{case_id or "report"}.pdf"',
-            "Content-Length": str(len(pdf_bytes)),
-        },
+        headers=headers,
     )
