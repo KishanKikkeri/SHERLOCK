@@ -1,0 +1,54 @@
+{
+  "FIR": {
+    "policy": "protect",
+    "notes": "Used verbatim in Kannada police speech/writing; not translated."
+  },
+  "IPC": {
+    "policy": "protect",
+    "notes": "Statute abbreviation; never translated."
+  },
+  "Chargesheet": {
+    "policy": "protect",
+    "notes": "Commonly used untranslated (or transliterated) in Karnataka police parlance. Flagged in STAGE_D handover as needing protection; treat as provisional pending review by a Kannada-fluent domain reviewer."
+  },
+  "Accused": {
+    "policy": "approved",
+    "kn": "ಆರೋಪಿ"
+  },
+  "Victim": {
+    "policy": "approved",
+    "kn": "ಸಂತ್ರಸ್ತ"
+  },
+  "Witness": {
+    "policy": "approved",
+    "kn": "ಸಾಕ್ಷಿ"
+  },
+  "Arrest": {
+    "policy": "approved",
+    "kn": "ಬಂಧನ"
+  },
+  "Bail": {
+    "policy": "approved",
+    "kn": "ಜಾಮೀನು"
+  },
+  "Investigation": {
+    "policy": "approved",
+    "kn": "ತನಿಖೆ"
+  },
+  "Court": {
+    "policy": "approved",
+    "kn": "ನ್ಯಾಯಾಲಯ"
+  },
+  "Charge": {
+    "policy": "approved",
+    "kn": "ಆರೋಪ"
+  },
+  "Case": {
+    "policy": "approved",
+    "kn": "ಪ್ರಕರಣ"
+  },
+  "Officer": {
+    "policy": "approved",
+    "kn": "ಅಧಿಕಾರಿ"
+  }
+}
