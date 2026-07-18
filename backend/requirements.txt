@@ -15,3 +15,6 @@ reportlab>=4.0          # PDF investigation report export
 requests>=2.31          # Stage D, Sprint 3 — outbound calls to pluggable cloud STT/TTS providers
 fonttools>=4.50         # Stage D, Sprint 4 — validates the bundled Kannada font's glyph coverage
                         # (also used by validate_stage_d4.py; not required at runtime for PDF export itself)
+pyjwt>=2.8              # Stage E1 — JWT access tokens
+argon2-cffi>=23.1       # Stage E1 — argon2id password hashing
+slowapi>=0.1.9          # Stage E6 — rate limiting (installed now, wired up in Sprint E6)

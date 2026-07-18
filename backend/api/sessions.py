@@ -19,12 +19,13 @@ Endpoints:
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
 from backend.database.config import SessionLocal
 from backend.database.service import DatabaseService
 from backend.database.models import InvestigationSessionStatus, InvestigationPriority
+from backend.security.permissions import RequirePermission, VIEW_CASE, MANAGE_CASE
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sessions", tags=["investigation-sessions"])
@@ -90,7 +91,7 @@ def _serialize(row) -> dict:
 
 
 @router.post("")
-def open_session(body: OpenSessionRequest):
+def open_session(body: OpenSessionRequest, _ctx=Depends(RequirePermission(MANAGE_CASE))):
     session = SessionLocal()
     try:
         svc = DatabaseService(session)
@@ -113,7 +114,7 @@ def open_session(body: OpenSessionRequest):
 
 
 @router.get("")
-def list_sessions(status: str | None = None, owner_officer_id: int | None = None):
+def list_sessions(status: str | None = None, owner_officer_id: int | None = None, _ctx=Depends(RequirePermission(VIEW_CASE))):
     session = SessionLocal()
     try:
         status_enum = None
@@ -135,13 +136,19 @@ def list_sessions(status: str | None = None, owner_officer_id: int | None = None
 
 
 @router.get("/{session_id}")
-def get_session(session_id: int):
+def get_session(session_id: int, ctx=Depends(RequirePermission(VIEW_CASE))):
     session = SessionLocal()
     try:
         svc = DatabaseService(session)
         row = svc.get_session(session_id)
         if row is None:
             raise HTTPException(status_code=404, detail="Session not found.")
+        from backend.security import audit as security_audit
+        from backend.database.models import AuditAction
+        security_audit.record(
+            session, AuditAction.INVESTIGATION_VIEWED,
+            user_id=ctx.user_id, username=ctx.username, target=f"session:{session_id}", success=True,
+        )
         return _serialize(row)
     except HTTPException:
         raise
@@ -153,7 +160,7 @@ def get_session(session_id: int):
 
 
 @router.patch("/{session_id}")
-def update_session(session_id: int, body: UpdateSessionRequest):
+def update_session(session_id: int, body: UpdateSessionRequest, _ctx=Depends(RequirePermission(MANAGE_CASE))):
     session = SessionLocal()
     try:
         svc = DatabaseService(session)
@@ -175,7 +182,7 @@ def update_session(session_id: int, body: UpdateSessionRequest):
 
 
 @router.post("/{session_id}/close")
-def close_session(session_id: int, body: LifecycleActionRequest = LifecycleActionRequest()):
+def close_session(session_id: int, body: LifecycleActionRequest = LifecycleActionRequest(), _ctx=Depends(RequirePermission(MANAGE_CASE))):
     session = SessionLocal()
     try:
         svc = DatabaseService(session)
@@ -193,7 +200,7 @@ def close_session(session_id: int, body: LifecycleActionRequest = LifecycleActio
 
 
 @router.post("/{session_id}/reopen")
-def reopen_session(session_id: int, body: LifecycleActionRequest = LifecycleActionRequest()):
+def reopen_session(session_id: int, body: LifecycleActionRequest = LifecycleActionRequest(), _ctx=Depends(RequirePermission(MANAGE_CASE))):
     session = SessionLocal()
     try:
         svc = DatabaseService(session)
@@ -213,7 +220,7 @@ def reopen_session(session_id: int, body: LifecycleActionRequest = LifecycleActi
 
 
 @router.post("/{session_id}/archive")
-def archive_session(session_id: int, body: LifecycleActionRequest = LifecycleActionRequest()):
+def archive_session(session_id: int, body: LifecycleActionRequest = LifecycleActionRequest(), _ctx=Depends(RequirePermission(MANAGE_CASE))):
     session = SessionLocal()
     try:
         svc = DatabaseService(session)
@@ -231,7 +238,7 @@ def archive_session(session_id: int, body: LifecycleActionRequest = LifecycleAct
 
 
 @router.post("/{session_id}/assign")
-def assign_investigator(session_id: int, body: AssignRequest):
+def assign_investigator(session_id: int, body: AssignRequest, _ctx=Depends(RequirePermission(MANAGE_CASE))):
     session = SessionLocal()
     try:
         svc = DatabaseService(session)
@@ -256,7 +263,7 @@ def assign_investigator(session_id: int, body: AssignRequest):
 
 
 @router.post("/{session_id}/unassign")
-def unassign_investigator(session_id: int, body: AssignRequest):
+def unassign_investigator(session_id: int, body: AssignRequest, _ctx=Depends(RequirePermission(MANAGE_CASE))):
     session = SessionLocal()
     try:
         svc = DatabaseService(session)
@@ -275,7 +282,7 @@ def unassign_investigator(session_id: int, body: AssignRequest):
 
 
 @router.get("/{session_id}/activity")
-def get_session_activity(session_id: int):
+def get_session_activity(session_id: int, _ctx=Depends(RequirePermission(VIEW_CASE))):
     session = SessionLocal()
     try:
         svc = DatabaseService(session)

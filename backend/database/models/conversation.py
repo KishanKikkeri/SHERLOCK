@@ -79,6 +79,11 @@ class ConversationTurn(Base):
     # purposes, without opening a new InvestigationSession.
     topic_reset = Column(String, nullable=True)
 
+    # Stage E5 (Governance): retention/archival, never physical deletion.
+    # Set by backend/security/retention.py when a turn's parent session
+    # has been closed longer than the configured retention window.
+    archived_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     session = relationship("InvestigationSession", back_populates="conversation_turns")

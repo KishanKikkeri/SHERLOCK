@@ -12,11 +12,12 @@ conversation timeline.
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 
 from backend.database.config import SessionLocal
 from backend.database.service import DatabaseService
 from backend.database.models import DiscussionRecord
+from backend.security.permissions import RequirePermission, VIEW_CASE
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["discussion"])
@@ -36,7 +37,7 @@ def _serialize(record: DiscussionRecord) -> dict:
 
 
 @router.get("/discussions/{discussion_id}")
-def get_discussion(discussion_id: int):
+def get_discussion(discussion_id: int, _ctx=Depends(RequirePermission(VIEW_CASE))):
     session = SessionLocal()
     try:
         record = session.get(DiscussionRecord, discussion_id)
@@ -53,7 +54,7 @@ def get_discussion(discussion_id: int):
 
 
 @router.get("/sessions/{session_id}/discussions")
-def get_session_discussions(session_id: int):
+def get_session_discussions(session_id: int, _ctx=Depends(RequirePermission(VIEW_CASE))):
     """Every discussion run for this session, in turn order — the
     replay view Stage C6 will eventually surface alongside the
     conversation timeline."""

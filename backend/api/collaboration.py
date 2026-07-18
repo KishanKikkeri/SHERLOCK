@@ -19,12 +19,13 @@ Endpoints:
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
 from backend.database.config import SessionLocal
 from backend.database.service import DatabaseService
 from backend.database.models import CommentTargetType, BoardObjectType, PresenceStatus
+from backend.security.permissions import RequirePermission, VIEW_CASE, PARTICIPATE_CASE, DECIDE_REVIEW
 from backend.collaboration.service import CollaborationService
 
 logger = logging.getLogger(__name__)
@@ -85,7 +86,7 @@ def _enum_or_400(enum_cls, value: str, field_name: str):
 # ---------------------------------------------------------------------------
 
 @router.post("/sessions/{session_id}/comments")
-def add_comment(session_id: int, body: CommentRequest):
+def add_comment(session_id: int, body: CommentRequest, _ctx=Depends(RequirePermission(PARTICIPATE_CASE))):
     target_type = _enum_or_400(CommentTargetType, body.target_type, "target_type")
     session = SessionLocal()
     try:
@@ -109,7 +110,7 @@ def add_comment(session_id: int, body: CommentRequest):
 
 
 @router.get("/sessions/{session_id}/comments")
-def get_comments(session_id: int, target_type: str | None = None, target_ref: str | None = None):
+def get_comments(session_id: int, target_type: str | None = None, target_ref: str | None = None, _ctx=Depends(RequirePermission(VIEW_CASE))):
     session = SessionLocal()
     try:
         svc_db = DatabaseService(session)
@@ -141,7 +142,7 @@ def get_comments(session_id: int, target_type: str | None = None, target_ref: st
 # ---------------------------------------------------------------------------
 
 @router.post("/sessions/{session_id}/board-objects")
-def add_board_object(session_id: int, body: BoardObjectRequest):
+def add_board_object(session_id: int, body: BoardObjectRequest, _ctx=Depends(RequirePermission(PARTICIPATE_CASE))):
     object_type = _enum_or_400(BoardObjectType, body.object_type, "object_type")
     session = SessionLocal()
     try:
@@ -160,7 +161,7 @@ def add_board_object(session_id: int, body: BoardObjectRequest):
 
 
 @router.get("/sessions/{session_id}/board-objects")
-def get_board_objects(session_id: int):
+def get_board_objects(session_id: int, _ctx=Depends(RequirePermission(VIEW_CASE))):
     session = SessionLocal()
     try:
         svc_db = DatabaseService(session)
@@ -178,7 +179,7 @@ def get_board_objects(session_id: int):
 
 
 @router.patch("/board-objects/{board_object_id}")
-def update_board_object(board_object_id: int, body: BoardObjectUpdateRequest):
+def update_board_object(board_object_id: int, body: BoardObjectUpdateRequest, _ctx=Depends(RequirePermission(PARTICIPATE_CASE))):
     session = SessionLocal()
     try:
         svc = CollaborationService(session)
@@ -210,7 +211,7 @@ def _serialize_board_object(obj) -> dict:
 # ---------------------------------------------------------------------------
 
 @router.post("/sessions/{session_id}/reviews")
-def request_review(session_id: int, body: ReviewRequestBody):
+def request_review(session_id: int, body: ReviewRequestBody, _ctx=Depends(RequirePermission(PARTICIPATE_CASE))):
     session = SessionLocal()
     try:
         svc = CollaborationService(session)
@@ -228,7 +229,7 @@ def request_review(session_id: int, body: ReviewRequestBody):
 
 
 @router.post("/reviews/{review_id}/decide")
-def decide_review(review_id: int, body: ReviewDecisionRequest):
+def decide_review(review_id: int, body: ReviewDecisionRequest, _ctx=Depends(RequirePermission(DECIDE_REVIEW))):
     session = SessionLocal()
     try:
         svc = CollaborationService(session)
@@ -246,7 +247,7 @@ def decide_review(review_id: int, body: ReviewDecisionRequest):
 
 
 @router.get("/sessions/{session_id}/reviews")
-def get_reviews(session_id: int):
+def get_reviews(session_id: int, _ctx=Depends(RequirePermission(VIEW_CASE))):
     session = SessionLocal()
     try:
         svc_db = DatabaseService(session)
@@ -279,7 +280,7 @@ def _serialize_review(review) -> dict:
 # ---------------------------------------------------------------------------
 
 @router.get("/officers/{officer_id}/notifications")
-def get_notifications(officer_id: int, unread_only: bool = False):
+def get_notifications(officer_id: int, unread_only: bool = False, _ctx=Depends(RequirePermission(VIEW_CASE))):
     session = SessionLocal()
     try:
         svc = CollaborationService(session)
@@ -301,7 +302,7 @@ def get_notifications(officer_id: int, unread_only: bool = False):
 
 
 @router.post("/notifications/{notification_id}/read")
-def mark_notification_read(notification_id: int):
+def mark_notification_read(notification_id: int, _ctx=Depends(RequirePermission(PARTICIPATE_CASE))):
     session = SessionLocal()
     try:
         svc = CollaborationService(session)
@@ -323,7 +324,7 @@ def mark_notification_read(notification_id: int):
 # ---------------------------------------------------------------------------
 
 @router.put("/sessions/{session_id}/presence")
-def heartbeat_presence(session_id: int, body: PresenceRequest):
+def heartbeat_presence(session_id: int, body: PresenceRequest, _ctx=Depends(RequirePermission(PARTICIPATE_CASE))):
     status = _enum_or_400(PresenceStatus, body.status, "status")
     session = SessionLocal()
     try:
@@ -343,7 +344,7 @@ def heartbeat_presence(session_id: int, body: PresenceRequest):
 
 
 @router.get("/sessions/{session_id}/presence")
-def get_presence(session_id: int):
+def get_presence(session_id: int, _ctx=Depends(RequirePermission(VIEW_CASE))):
     session = SessionLocal()
     try:
         svc_db = DatabaseService(session)
@@ -368,7 +369,7 @@ def get_presence(session_id: int):
 # ---------------------------------------------------------------------------
 
 @router.get("/sessions/{session_id}/activity-feed")
-def get_activity_feed(session_id: int):
+def get_activity_feed(session_id: int, _ctx=Depends(RequirePermission(VIEW_CASE))):
     session = SessionLocal()
     try:
         svc_db = DatabaseService(session)

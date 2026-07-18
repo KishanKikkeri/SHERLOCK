@@ -11,10 +11,14 @@ Endpoints:
 
 import json
 import logging
+import os
 
-from fastapi import Body, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Body, Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import Response as FastAPIResponse
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
 
 from backend.api.investigation_stream import stream_investigation, run_investigation_once
 from backend.api.sessions import router as sessions_router
@@ -24,6 +28,22 @@ from backend.api.voice import router as voice_router
 from backend.api.discussion import router as discussion_router
 from backend.api.collaboration import router as collaboration_router
 from backend.api.language import router as language_router
+from backend.api.auth import router as auth_router
+from backend.api.admin import router as admin_router
+from backend.api.audit import router as audit_router
+from backend.api.governance import router as governance_router
+from backend.security.config import AUTH_ENABLED
+from backend.security.seed import run_all_seeds
+from backend.security.permissions import RequirePermission, VIEW_CASE, RUN_INVESTIGATION, EXPORT_PDF
+from backend.security import audit as security_audit
+from backend.security.dependencies import AuthContext
+from backend.security import masking
+from backend.security.rate_limit import limiter
+from backend.security.request_context import (
+    RequestContextMiddleware, SecurityHeadersMiddleware, configure_structured_logging,
+)
+from backend.security.health import get_component_health
+from backend.database.models import AuditAction
 from backend.database.config import SessionLocal
 from backend.database.models import Person, Crime, FIR, BankAccount, Transaction
 from backend.graph.service import get_graph_service
@@ -32,15 +52,39 @@ from backend.logging_config import configure_logging
 from backend.reporting.pdf_export import generate_investigation_pdf, pdf_export_warnings
 
 configure_logging()
+configure_structured_logging()
 logger = logging.getLogger(__name__)
 
 MAX_GRAPH_HOPS = 5  # BFS cost grows quickly; no legitimate UI use case needs more than this
 
 app = FastAPI(title="SHERLOCK Crime Intelligence API", version="1.0.0")
 
+# Stage E6 — rate limiting (optional, off by default; see backend/security/rate_limit.py)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Stage E6 — request/correlation IDs + security headers. Order matters:
+# Starlette applies middleware in reverse of add order, so this makes
+# SecurityHeadersMiddleware the outermost (runs last on the way out,
+# guaranteeing its headers survive) with RequestContextMiddleware just
+# inside it (so its timing measurement wraps the actual route handler).
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestContextMiddleware)
+
+# Stage E6 — trusted hosts. Comma-separated env var; "*" (default) skips
+# the restriction entirely rather than adding a middleware that allows
+# everything anyway — one less moving part when it isn't configured.
+_trusted_hosts_env = os.getenv("SHERLOCK_TRUSTED_HOSTS", "*").strip()
+if _trusted_hosts_env and _trusted_hosts_env != "*":
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=[h.strip() for h in _trusted_hosts_env.split(",") if h.strip()])
+
+# Stage E6 — CORS. Comma-separated env var; "*" (default) preserves the
+# pre-Stage-E6 wide-open dev behavior exactly.
+_cors_origins_env = os.getenv("SHERLOCK_CORS_ORIGINS", "*").strip()
+_cors_origins = ["*"] if _cors_origins_env == "*" else [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # tighten in production; open for hackathon dev
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -56,6 +100,35 @@ app.include_router(collaboration_router)
 # Stage D (Language Intelligence) — new, additive
 app.include_router(language_router)
 
+# Stage E1 (Authentication) — new, additive
+app.include_router(auth_router)
+
+# Stage E2 (RBAC / Administration) — new, additive
+app.include_router(admin_router)
+
+# Stage E3 (Audit & Compliance) — new, additive
+app.include_router(audit_router)
+
+# Stage E5 (Governance) — new, additive
+app.include_router(governance_router)
+
+
+@app.on_event("startup")
+def _seed_security_data():
+    """Seeds the fixed Role vocabulary (and an optional bootstrap admin,
+    see backend/security/config.py) only when SHERLOCK_AUTH_ENABLED=true.
+    Left untouched when auth is disabled, so a zero-configuration dev run
+    creates no new rows in the security tables at all (Golden Rule 4/5)."""
+    if not AUTH_ENABLED:
+        return
+    session = SessionLocal()
+    try:
+        run_all_seeds(session)
+    except Exception:
+        logger.exception("Security seed step failed on startup")
+    finally:
+        session.close()
+
 
 # ---------------------------------------------------------------------------
 # Health
@@ -63,7 +136,16 @@ app.include_router(language_router)
 
 @app.get("/health")
 def health():
-    return {"status": "operational", "system": "SHERLOCK"}
+    """
+    Liveness probe. `status` and `system` are unchanged from pre-Stage-E6
+    behavior; `components` (Stage E6) is additive — a caller that only
+    ever checked `status == "operational"` is unaffected.
+    """
+    return {
+        "status": "operational",
+        "system": "SHERLOCK",
+        "components": get_component_health(),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -101,10 +183,18 @@ def metrics():
 # ---------------------------------------------------------------------------
 
 @app.get("/graph/{person_id}")
-def get_person_subgraph(person_id: int, hops: int = 1):
+def get_person_subgraph(person_id: int, hops: int = 1, ctx=Depends(RequirePermission(VIEW_CASE))):
     """
     Returns a small ego-graph around `person_id` (up to `hops` steps) as
     a {nodes, edges} payload for Cytoscape / react-force-graph.
+
+    Stage E4: sensitive fields on each node (`Phone.number`,
+    `BankAccount.account_number`, `Location.latitude`/`longitude`) are
+    masked according to the caller's role — see
+    `backend/security/masking.py`. The database itself is never touched;
+    this only affects what's serialized into the response. With
+    SHERLOCK_AUTH_ENABLED=false (default), visibility is always FULL —
+    identical to pre-Stage-E4 behavior.
     """
     if not (1 <= hops <= MAX_GRAPH_HOPS):
         raise HTTPException(status_code=422, detail=f"hops must be between 1 and {MAX_GRAPH_HOPS}.")
@@ -132,18 +222,22 @@ def get_person_subgraph(person_id: int, hops: int = 1):
             frontier = next_frontier
 
         nodes = []
+        visibility = masking.visibility_for(ctx)
         for n in visited:
             data = G.nodes[n]
+            node_type = data.get("label", "Unknown")
+            node_data = {k: v for k, v in data.items() if k != "label"}
+            node_data = masking.mask_graph_node_data(node_type, node_data, visibility)
             label_val = (
-                data.get("name") or data.get("fir_number") or data.get("number")
-                or data.get("account_number") or data.get("registration_number")
+                node_data.get("name") or node_data.get("fir_number") or node_data.get("number")
+                or node_data.get("account_number") or node_data.get("registration_number")
                 or n
             )
             nodes.append({
                 "id": n,
                 "label": label_val,
-                "type": data.get("label", "Unknown"),
-                "data": {k: v for k, v in data.items() if k != "label"},
+                "type": node_type,
+                "data": node_data,
             })
 
         edges = []
@@ -177,6 +271,39 @@ def get_person_subgraph(person_id: int, hops: int = 1):
 
 @app.websocket("/ws/investigate")
 async def ws_investigate(websocket: WebSocket):
+    # WebSocket handshakes can't carry an Authorization header from a
+    # browser client, so when auth is enabled the access token is passed
+    # as a query param instead: /ws/investigate?token=...  This mirrors
+    # RUN_INVESTIGATION's permission requirement on POST /investigate,
+    # just via a transport WS actually supports. When AUTH_ENABLED=false
+    # (default), no token is required at all — unchanged from Stage D.
+    if AUTH_ENABLED:
+        from backend.security.dependencies import get_db as _get_db
+        from backend.security.auth import get_user_from_access_token, get_user_role_names, AuthError
+        from backend.security.permissions import has_permission
+        from backend.security.dependencies import AuthContext
+
+        token = websocket.query_params.get("token")
+        db = next(_get_db())
+        try:
+            if not token:
+                await websocket.close(code=4401, reason="Not authenticated.")
+                return
+            try:
+                user = get_user_from_access_token(db, token)
+            except AuthError as e:
+                await websocket.close(code=4401, reason=str(e))
+                return
+            ctx = AuthContext(
+                user_id=user.id, username=user.username,
+                roles=get_user_role_names(db, user), officer_id=user.officer_id,
+            )
+            if not has_permission(ctx, RUN_INVESTIGATION):
+                await websocket.close(code=4403, reason="Missing required permission: run_investigation")
+                return
+        finally:
+            db.close()
+
     await websocket.accept()
     try:
         raw = await websocket.receive_text()
@@ -216,7 +343,7 @@ async def ws_investigate(websocket: WebSocket):
 # ---------------------------------------------------------------------------
 
 @app.post("/investigate")
-async def investigate(payload: dict = Body(...)):
+async def investigate(payload: dict = Body(...), _ctx=Depends(RequirePermission(RUN_INVESTIGATION))):
     """
     Non-streaming counterpart to `/ws/investigate`, added for Stage D so
     the multilingual pipeline has a plain request/response shape to test
@@ -257,7 +384,8 @@ async def investigate(payload: dict = Body(...)):
 # ---------------------------------------------------------------------------
 
 @app.post("/export/pdf")
-async def export_pdf(payload: dict = Body(...)):
+async def export_pdf(payload: dict = Body(...), request: Request = None,
+                      ctx: AuthContext = Depends(RequirePermission(EXPORT_PDF))):
     """
     Generate a PDF investigation report from a completed final_report.
 
@@ -290,6 +418,18 @@ async def export_pdf(payload: dict = Body(...)):
     except Exception:
         logger.exception("PDF export failed for case_id=%r", case_id)
         raise HTTPException(status_code=500, detail="PDF generation failed.")
+
+    _audit_db = SessionLocal()
+    try:
+        security_audit.record(
+            _audit_db, AuditAction.REPORT_GENERATED,
+            user_id=ctx.user_id, username=ctx.username, target=f"case:{case_id or 'unknown'}",
+            success=True, ip_address=(request.client.host if request and request.client else None),
+            user_agent=(request.headers.get("user-agent") if request else None),
+            metadata={"language": language},
+        )
+    finally:
+        _audit_db.close()
 
     headers = {
         "Content-Disposition": f'attachment; filename="SHERLOCK-{case_id or "report"}.pdf"',

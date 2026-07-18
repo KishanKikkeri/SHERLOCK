@@ -43,6 +43,7 @@ from backend.database.models.enums import (  # noqa: F401
     ChargeSheetStatus, OrganizationType, WeaponType,
     InvestigationSessionStatus, InvestigationPriority,
     ReviewStatus, NotificationType, CommentTargetType, BoardObjectType, PresenceStatus,
+    SystemRole, AuditAction,
 )
 
 # Core identity + compatibility tables (compat.py must load before
@@ -93,6 +94,12 @@ from backend.database.models.collaboration import (  # noqa: F401
     BoardObject, Comment, Notification, ReviewRequest, SessionPresence,
 )
 
+# Stage E1 — Authentication (new, additive)
+from backend.database.models.auth import User, Role, UserRole, RefreshToken  # noqa: F401
+
+# Stage E3 — Audit & Compliance (new, additive)
+from backend.database.models.audit import AuditLog  # noqa: F401
+
 from sqlalchemy.orm import configure_mappers
 
 configure_mappers()
@@ -105,6 +112,7 @@ __all__ = [
     "ChargeSheetStatus", "OrganizationType", "WeaponType",
     "InvestigationSessionStatus", "InvestigationPriority",
     "ReviewStatus", "NotificationType", "CommentTargetType", "BoardObjectType", "PresenceStatus",
+    "SystemRole", "AuditAction",
     # Legacy-compatible symbols (imported by existing agents/graph builders/datasets)
     "Person", "Location", "Crime", "FIR", "Vehicle", "Phone", "BankAccount",
     "Transaction", "PersonCrimeLink", "PersonAssociation", "PersonAlias",
@@ -118,4 +126,8 @@ __all__ = [
     "DiscussionRecord",
     # Stage C6 — new, additive
     "BoardObject", "Comment", "Notification", "ReviewRequest", "SessionPresence",
+    # Stage E1 — new, additive
+    "User", "Role", "UserRole", "RefreshToken",
+    # Stage E3 — new, additive
+    "AuditLog",
 ]

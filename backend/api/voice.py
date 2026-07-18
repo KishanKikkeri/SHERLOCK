@@ -33,7 +33,7 @@ optional path.
 import base64
 import logging
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -41,6 +41,7 @@ from backend.database.config import SessionLocal
 from backend.language import SUPPORTED_LANGUAGES
 from backend.voice.command_router import VoiceCommandRouter
 from backend.voice.voice_service import VoiceService
+from backend.security.permissions import RequirePermission, USE_VOICE
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/voice", tags=["voice"])
@@ -52,11 +53,19 @@ class VoiceCommandRequest(BaseModel):
 
 
 @router.post("/command")
-async def voice_command(body: VoiceCommandRequest):
+async def voice_command(body: VoiceCommandRequest, ctx=Depends(RequirePermission(USE_VOICE))):
     session = SessionLocal()
     try:
         cmd_router = VoiceCommandRouter(session)
         result = await cmd_router.route(body.transcript, session_id=body.session_id)
+        from backend.security import audit as security_audit
+        from backend.database.models import AuditAction
+        security_audit.record(
+            session, AuditAction.VOICE_COMMAND,
+            user_id=ctx.user_id, username=ctx.username,
+            target=f"session:{body.session_id}" if body.session_id else None, success=True,
+            metadata={"transcript": body.transcript[:200]},
+        )
         return result.to_dict()
     except Exception:
         logger.exception("POST /voice/command failed for transcript: %r", body.transcript)
@@ -76,7 +85,7 @@ class SpeakRequest(BaseModel):
 
 
 @router.post("/transcribe")
-async def voice_transcribe(audio: UploadFile = File(...), language_hint: str | None = Form(None)):
+async def voice_transcribe(audio: UploadFile = File(...), language_hint: str | None = Form(None), _ctx=Depends(RequirePermission(USE_VOICE))):
     """
     Body: multipart/form-data, field `audio` (the audio file), optional
     field `language_hint` ("en" or "kn"). Returns:
@@ -110,7 +119,7 @@ async def voice_transcribe(audio: UploadFile = File(...), language_hint: str | N
 
 
 @router.post("/speak")
-async def voice_speak(body: SpeakRequest):
+async def voice_speak(body: SpeakRequest, _ctx=Depends(RequirePermission(USE_VOICE))):
     """
     Body: {"text": "...", "language": "kn", "voice": null}
     Returns: audio bytes (Content-Type set per the active TTS provider —
@@ -143,7 +152,7 @@ async def voice_speak(body: SpeakRequest):
 
 @router.post("/query")
 async def voice_query(audio: UploadFile = File(...), session_id: int | None = Form(None),
-                       language_hint: str | None = Form(None)):
+                       language_hint: str | None = Form(None), _ctx=Depends(RequirePermission(USE_VOICE))):
     """
     Full round trip, per the Stage D Sprint 3 workflow: Kannada (or
     English) speech in -> transcribe -> detect/translate -> run the same

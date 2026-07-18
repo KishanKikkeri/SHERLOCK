@@ -17,19 +17,20 @@ different question:
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 import json
 
 from backend.database.config import SessionLocal
 from backend.database.service import DatabaseService
 from backend.memory.conversation_memory import ConversationMemoryService
+from backend.security.permissions import RequirePermission, VIEW_CASE
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sessions", tags=["conversation-memory"])
 
 
 @router.get("/{session_id}/conversation")
-def get_conversation(session_id: int):
+def get_conversation(session_id: int, _ctx=Depends(RequirePermission(VIEW_CASE))):
     session = SessionLocal()
     try:
         svc = DatabaseService(session)
@@ -61,7 +62,7 @@ def get_conversation(session_id: int):
 
 
 @router.get("/{session_id}/context")
-def get_context_summary(session_id: int):
+def get_context_summary(session_id: int, _ctx=Depends(RequirePermission(VIEW_CASE))):
     """The compressed rolling summary maintained by
     `ConversationMemoryService.maybe_summarize` (Sprint 2, item 3), plus
     which turn it covers up to. Sessions under the summarization
@@ -88,7 +89,7 @@ def get_context_summary(session_id: int):
 
 
 @router.get("/{session_id}/timeline/conversation")
-def get_conversation_timeline(session_id: int):
+def get_conversation_timeline(session_id: int, _ctx=Depends(RequirePermission(VIEW_CASE))):
     """Sprint 2, item 6: every turn in order, with clarification
     questions and topic resets surfaced as first-class timeline events
     rather than hidden inside raw_query text."""
@@ -130,7 +131,7 @@ def get_conversation_timeline(session_id: int):
 
 
 @router.get("/{session_id}/timeline/entities")
-def get_entity_timeline(session_id: int):
+def get_entity_timeline(session_id: int, _ctx=Depends(RequirePermission(VIEW_CASE))):
     """Sprint 2, item 6: every entity mentioned across the session,
     grouped by (kind, id), with the ordered list of turns it appeared
     in. Built from `entity_mentions_json` (every mention, not just the
@@ -163,7 +164,7 @@ def get_entity_timeline(session_id: int):
 
 
 @router.get("/{session_id}/timeline/decisions")
-def get_decision_timeline(session_id: int):
+def get_decision_timeline(session_id: int, _ctx=Depends(RequirePermission(VIEW_CASE))):
     """Sprint 2, item 6: turns where the Chief actually produced a
     conclusion (as opposed to a clarification question or a bare topic
     reset), with the accepted/rejected finding counts for that turn so

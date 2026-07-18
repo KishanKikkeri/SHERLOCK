@@ -178,3 +178,42 @@ class BoardObjectType(str, enum.Enum):
 class PresenceStatus(str, enum.Enum):
     VIEWING = "viewing"
     EDITING = "editing"
+
+
+# ---------------------------------------------------------------------------
+# Stage E1 — Authentication (new, additive; nothing above is touched)
+# ---------------------------------------------------------------------------
+
+class SystemRole(str, enum.Enum):
+    """Fixed RBAC vocabulary for Stage E2. Declared here (not invented ad
+    hoc in security/) so it lives alongside every other enum and is a
+    single source of truth for both the `roles` seed data and permission
+    tables in backend/security/permissions.py."""
+    ADMINISTRATOR = "administrator"
+    SUPERVISOR = "supervisor"
+    INVESTIGATOR = "investigator"
+    ANALYST = "analyst"
+    POLICY_MAKER = "policy_maker"
+    READ_ONLY = "read_only"
+
+
+class AuditAction(str, enum.Enum):
+    """Fixed vocabulary of auditable actions for Stage E3's AuditLog.
+    Kept as an enum (rather than a free-text `action` column) so
+    GET /audit filtering is reliable and the set of "sensitive
+    operations" the Definition of Done requires is explicit and
+    reviewable in one place."""
+    LOGIN = "login"
+    LOGIN_FAILED = "login_failed"
+    LOGOUT = "logout"
+    TOKEN_REFRESH = "token_refresh"
+    TOKEN_REVOKED = "token_revoked"
+    PERMISSION_DENIED = "permission_denied"
+    ROLE_CHANGED = "role_changed"
+    INVESTIGATION_VIEWED = "investigation_viewed"
+    EVIDENCE_VIEWED = "evidence_viewed"
+    CASE_EXPORTED = "case_exported"
+    REPORT_GENERATED = "report_generated"
+    VOICE_COMMAND = "voice_command"
+    RECORD_ARCHIVED = "record_archived"
+    RECORD_DELETED = "record_deleted"
