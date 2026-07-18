@@ -1,0 +1,128 @@
+@import "tailwindcss";
+/* Fira Sans/Code are loaded via <link> tags in index.html, not @import
+   here — Tailwind v4's generated @layer rules trip Lightning CSS's
+   "@import must precede other rules" check if a font @import follows
+   them in this file, and a <link> is faster to fetch anyway. */
+
+/* Class-based dark mode (default) instead of prefers-color-scheme,
+   so the theme toggle in AppShell has something to control. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---- Raw token values: 01-DESIGN-SYSTEM.md is the source of truth,
+   this file must not drift from it. ---- */
+:root {
+  --background: #F8FAFC;
+  --surface: #FFFFFF;
+  --surface-raised: #F1F5F9;
+  --border: #E2E8F0;
+  --text: #020617;
+  --text-muted: #64748B;
+  --primary: #0F172A;
+  --primary-foreground: #F8FAFC;
+  --accent: #0369A1;
+  --ring: #0369A1;
+
+  --positive: #22C55E;
+  --warning: #F59E0B;
+  --critical: #DC2626;
+  --info: #0369A1;
+
+  --entity-person: #38BDF8;
+  --entity-officer: #22D3EE;
+  --entity-organization: #A78BFA;
+  --entity-vehicle: #FB923C;
+  --entity-weapon: #F87171;
+  --entity-bank-account: #34D399;
+  --entity-transaction: #10B981;
+  --entity-phone: #F472B6;
+  --entity-court: #94A3B8;
+  --entity-location: #2DD4BF;
+  --entity-fir: #F59E0B;
+  --entity-investigation: #818CF8;
+  --entity-evidence: #FB7185;
+  --entity-crime: #EF4444;
+  --entity-property: #FACC15;
+}
+
+.dark {
+  --background: #020617;
+  --surface: #0F172A;
+  --surface-raised: #1A1E2F;
+  --border: #334155;
+  --text: #F8FAFC;
+  --text-muted: #94A3B8;
+  --primary: #0F172A;
+  --primary-foreground: #F8FAFC;
+  --accent: #0369A1;
+  --ring: #38BDF8;
+}
+
+/* ---- Map raw vars into Tailwind's theme so `bg-surface`, `text-muted`,
+   `border-border`, `ring-ring`, `font-sans` etc. exist as utilities and
+   respond to the .dark class at runtime. ---- */
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-ring: var(--ring);
+
+  --color-positive: var(--positive);
+  --color-warning: var(--warning);
+  --color-critical: var(--critical);
+  --color-info: var(--info);
+
+  --color-entity-person: var(--entity-person);
+  --color-entity-officer: var(--entity-officer);
+  --color-entity-organization: var(--entity-organization);
+  --color-entity-vehicle: var(--entity-vehicle);
+  --color-entity-weapon: var(--entity-weapon);
+  --color-entity-bank-account: var(--entity-bank-account);
+  --color-entity-transaction: var(--entity-transaction);
+  --color-entity-phone: var(--entity-phone);
+  --color-entity-court: var(--entity-court);
+  --color-entity-location: var(--entity-location);
+  --color-entity-fir: var(--entity-fir);
+  --color-entity-investigation: var(--entity-investigation);
+  --color-entity-evidence: var(--entity-evidence);
+  --color-entity-crime: var(--entity-crime);
+  --color-entity-property: var(--entity-property);
+
+  --font-sans: 'Fira Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html {
+    color-scheme: dark;
+  }
+  html:not(.dark) {
+    color-scheme: light;
+  }
+  body {
+    background-color: var(--background);
+    color: var(--text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background-color: var(--accent);
+    color: white;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

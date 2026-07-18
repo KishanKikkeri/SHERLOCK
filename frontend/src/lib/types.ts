@@ -1,32 +1,130 @@
-export type EventType = 'investigation_started'|'agent_completed'|'agent_skipped'|'agent_failed'|'report_ready'|'error';
-export interface WSEvent{timestamp:string;event_type:EventType;agent:string|null;message:string|null;data:{new_findings?:AgentFinding[];validated_findings?:AgentFinding[]|null;final_report?:FinalReport|null;}|null;}
-export interface AgentFinding{agent_name:string;finding_type:string;summary:string;evidence:string[];confidence:number;source_entities:string[];metadata:Record<string,unknown>;validated:boolean;validation_notes:string;}
-export interface FinalReport{query:string;narrative:string;findings:AgentFinding[];rejected_findings:AgentFinding[];agents_consulted:string[];}
-export type InvestigationStatus='idle'|'running'|'complete'|'error';
-export type AgentStatus='pending'|'running'|'complete'|'skipped'|'failed';
-export interface AgentStep{name:string;nodeKey:string;status:AgentStatus;message:string|null;timestamp:string|null;findings:AgentFinding[];}
-export interface FeedEntry{id:string;timestamp:string;agent:string;status:'done'|'skipped'|'started'|'error'|'failed';message:string;}
-export interface GraphNode{id:string;label:string;type:NodeType;data:Record<string,unknown>;}
-export interface GraphEdge{source:string;target:string;type:string;}
-export interface GraphData{nodes:GraphNode[];edges:GraphEdge[];center:string;}
-export type NodeType='Person'|'Crime'|'FIR'|'Location'|'Vehicle'|'Phone'|'BankAccount'|'Transaction';
-export interface Metrics{persons:number;crimes:number;firs:number;relationships:number;repeat_offenders:number;fraud_network_size:number;suspicious_transactions:number;}
-export const PREVENTION_TYPES=new Set(['patrol_strategy','surveillance_action','prevention_recommendation']);
-export const SKIP_TYPES=new Set(['patrol_strategy','surveillance_action','prevention_recommendation','validation_summary']);
-export const AGENT_PIPELINE:{nodeKey:string;name:string}[]=[
-  {nodeKey:'chief_plan',name:'Chief Investigation Officer — Planning'},
-  {nodeKey:'crime_records',name:'Crime Records Agent'},
-  {nodeKey:'network_analysis',name:'Network Analysis Agent'},
-  {nodeKey:'entity_resolution',name:'Entity Resolution Agent'},
-  {nodeKey:'timeline_reconstruction',name:'Timeline Reconstruction Agent'},
-  {nodeKey:'financial_agent',name:'Financial Intelligence Agent'},
-  {nodeKey:'similar_case',name:'Similar Case Agent'},
-  {nodeKey:'pattern_analysis',name:'Pattern & MO Agent'},
-  {nodeKey:'forecasting_agent',name:'Forecasting Agent'},
-  {nodeKey:'prevention_agent',name:'Prevention Intelligence Agent'},
-  {nodeKey:'evidence_validation',name:'Evidence Validation Agent'},
-  {nodeKey:'chief_synthesis',name:'Chief Investigation Officer — Synthesis'},
-];
-// NOTE: every `name` above must be unique and match backend/api/investigation_stream.py's
-// NODE_LABELS exactly — useInvestigation.ts matches incoming events to a step by this name,
-// not by nodeKey (WSEvent only carries the display name, not the LangGraph node key).
+// Shapes verified against backend/api/*.py and backend/database/models/*.py
+// — see docs/stage-f/02-API-CONTRACTS.md. Keep this file and that doc in sync.
+
+export type Role =
+  | 'administrator'
+  | 'supervisor'
+  | 'investigator'
+  | 'analyst'
+  | 'policy_maker'
+  | 'read_only'
+
+export type Permission =
+  | 'view_case'
+  | 'participate_case'
+  | 'manage_case'
+  | 'decide_review'
+  | 'use_voice'
+  | 'run_investigation'
+  | 'export_pdf'
+  | 'view_audit'
+  | 'manage_users'
+  | 'administer_system'
+
+export interface TokenResponse {
+  access_token: string
+  refresh_token: string
+  token_type: 'bearer'
+  expires_at: string
+}
+
+export interface UserOut {
+  id: number
+  username: string
+  email: string | null
+  full_name: string | null
+  officer_id: number | null
+  is_active: boolean
+  roles: Role[]
+}
+
+export type SessionStatus = 'open' | 'closed' | 'reopened' | 'archived'
+export type SessionPriority = 'low' | 'medium' | 'high' | 'critical'
+
+export interface InvestigationSession {
+  id: number
+  session_code: string
+  title: string
+  fir_id: number | null
+  status: SessionStatus
+  priority: SessionPriority
+  opened_by_officer_id: number | null
+  owner_officer_id: number | null
+  opened_at: string
+  closed_at: string | null
+  reopened_at: string | null
+  archived_at: string | null
+  updated_at: string
+  notes: string | null
+}
+
+export interface HealthResponse {
+  status: 'ok' | 'degraded' | 'down'
+  system: string
+  components: Record<string, string>
+}
+
+export interface MetricsResponse {
+  persons: number
+  crimes: number
+  firs: number
+  relationships: number
+  repeat_offenders: number
+  fraud_network_size: number
+  suspicious_transactions: number
+}
+
+export interface NotificationOut {
+  id: number
+  officer_id: number
+  session_id: number | null
+  kind: string
+  body: string
+  read: boolean
+  created_at: string
+}
+
+export interface ActivityFeedItem {
+  id: number
+  session_id: number
+  actor_officer_id: number | null
+  action: string
+  detail: string | null
+  created_at: string
+}
+
+export interface DiscussionRecord {
+  id: number
+  session_id: number
+  turn_index: number
+  query: string
+  opinions: unknown
+  disagreements: unknown
+  consensus: string | null
+  created_at: string
+}
+
+export interface AuditLogEntry {
+  id: number
+  user_id: number | null
+  username: string | null
+  action: string
+  target: string | null
+  success: boolean
+  ip_address: string | null
+  user_agent: string | null
+  metadata: Record<string, unknown> | null
+  created_at: string
+}
+
+export interface RetentionPolicy {
+  investigation_sessions_days: number
+  conversation_turns_days: number
+  audit_log_days: number
+  deletion_mode: string
+}
+
+export interface ApiError {
+  status: number
+  detail: string
+}
