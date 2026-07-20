@@ -26,9 +26,9 @@ export function ActivityFeed({ sessions }: { sessions: InvestigationSession[] | 
           />
         ) : (
           <ul className="flex flex-col gap-2.5">
-            {items.map((item) => (
-              <li key={item.id} className="flex items-baseline justify-between gap-3 text-sm">
-                <span className="min-w-0 truncate text-text">{item.detail ?? item.action}</span>
+            {items.map((item, i) => (
+              <li key={`${item.kind}-${item.created_at}-${i}`} className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="min-w-0 truncate text-text">{item.detail ?? item.event_type}</span>
                 <span className="shrink-0 font-mono text-xs text-muted">
                   {formatRelativeTime(item.created_at)}
                 </span>

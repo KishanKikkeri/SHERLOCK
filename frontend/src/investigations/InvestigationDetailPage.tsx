@@ -1,11 +1,15 @@
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Construction } from 'lucide-react'
+import { ArrowLeft, Construction, LayoutDashboard, Network, Lightbulb, Mic } from 'lucide-react'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useSession } from '@/lib/queries/sessions'
 import { priorityTone, statusTone } from '@/lib/status-tone'
 import { formatRelativeTime } from '@/lib/format'
+import { PresenceIndicator } from '@/collaboration/PresenceIndicator'
+import { SessionActivityFeed } from '@/collaboration/SessionActivityFeed'
+import { DiscussionReplay } from '@/collaboration/DiscussionReplay'
 
 export function InvestigationDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -22,7 +26,7 @@ export function InvestigationDetailPage() {
         Back to investigations
       </Link>
 
-      {isLoading || !session ? (
+      {isLoading || !session || !sessionId ? (
         <Skeleton className="h-32 w-full" />
       ) : (
         <>
@@ -31,7 +35,8 @@ export function InvestigationDetailPage() {
               <h1 className="text-lg font-semibold text-text">{session.title}</h1>
               <p className="font-mono text-sm text-muted">{session.session_code}</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              <PresenceIndicator sessionId={sessionId} />
               <Badge tone={priorityTone(session.priority)} className="capitalize">
                 {session.priority}
               </Badge>
@@ -61,16 +66,46 @@ export function InvestigationDetailPage() {
             </CardBody>
           </Card>
 
+          <div className="flex flex-wrap gap-2">
+            <Link to={`/investigations/${session.id}/board`}>
+              <Button variant="secondary" size="sm">
+                <LayoutDashboard className="h-3.5 w-3.5" /> Open board
+              </Button>
+            </Link>
+            <Link to={`/investigations/${session.id}/findings`}>
+              <Button variant="secondary" size="sm">
+                <Lightbulb className="h-3.5 w-3.5" /> Findings
+              </Button>
+            </Link>
+            <Link to="/graph">
+              <Button variant="secondary" size="sm">
+                <Network className="h-3.5 w-3.5" /> Open network graph
+              </Button>
+            </Link>
+            <Link to="/voice">
+              <Button variant="secondary" size="sm">
+                <Mic className="h-3.5 w-3.5" /> Voice
+              </Button>
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <SessionActivityFeed sessionId={sessionId} />
+            <DiscussionReplay sessionId={sessionId} />
+          </div>
+
           <Card>
-            <CardBody className="flex flex-col items-center gap-2 py-10 text-center">
+            <CardBody className="flex flex-col items-center gap-2 py-8 text-center">
               <Construction className="h-6 w-6 text-muted" aria-hidden />
               <p className="text-sm font-medium text-text">
-                The full investigation workspace isn't built yet
+                The live conversation panel isn't built yet
               </p>
               <p className="max-w-md text-xs text-muted">
-                Conversation, follow-up chat, voice, the evidence board, the graph, findings, and
-                the timeline ship in Sprints F2–F6 (see docs/stage-f/03-COMPONENT-ARCHITECTURE.md).
-                This page intentionally shows real session data only — no mocked panels.
+                Board (F3), graph (F2), voice (F4), findings (F6), and this session's activity
+                and discussion history (F5) are all real and linked above. The one piece still
+                missing is a live WS-connected conversation/follow-up-chat panel — voice already
+                covers most of what that would do (see the Voice page), so it's lower priority
+                than it looked at the start of Stage F.
               </p>
             </CardBody>
           </Card>

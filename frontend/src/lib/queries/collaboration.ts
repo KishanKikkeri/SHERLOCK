@@ -1,10 +1,11 @@
-import { useQueries, useQuery } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api-client'
 import type {
   ActivityFeedItem,
   DiscussionRecord,
   InvestigationSession,
   NotificationOut,
+  PresenceEntry,
 } from '@/lib/types'
 
 export function useNotifications(officerId: number | null | undefined) {
@@ -13,6 +14,42 @@ export function useNotifications(officerId: number | null | undefined) {
     queryFn: () => apiFetch<NotificationOut[]>(`/officers/${officerId}/notifications`),
     enabled: officerId !== null && officerId !== undefined,
     refetchInterval: 30 * 1000,
+  })
+}
+
+export function useMarkNotificationRead(officerId: number | null | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (notificationId: number) =>
+      apiFetch(`/notifications/${notificationId}/read`, { method: 'POST' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications', officerId] }),
+  })
+}
+
+/** Single-session activity feed — for a session-scoped view (F5), as
+ * opposed to useDashboardActivityFeed's cross-session composition. */
+export function useSessionActivityFeed(sessionId: number | undefined) {
+  return useQuery({
+    queryKey: ['activity-feed', sessionId],
+    queryFn: () => apiFetch<ActivityFeedItem[]>(`/sessions/${sessionId}/activity-feed`),
+    enabled: sessionId !== undefined,
+    refetchInterval: 20 * 1000,
+  })
+}
+
+export function usePresence(sessionId: number | undefined) {
+  return useQuery({
+    queryKey: ['presence', sessionId],
+    queryFn: () => apiFetch<PresenceEntry[]>(`/sessions/${sessionId}/presence`),
+    enabled: sessionId !== undefined,
+    refetchInterval: 20 * 1000,
+  })
+}
+
+export function useHeartbeatPresence(sessionId: number | undefined) {
+  return useMutation({
+    mutationFn: (body: { officer_id: number; status: 'viewing' | 'editing' }) =>
+      apiFetch(`/sessions/${sessionId}/presence`, { method: 'PUT', body }),
   })
 }
 
@@ -48,6 +85,17 @@ export function useDashboardActivityFeed(sessions: InvestigationSession[] | unde
     .slice(0, 15)
 
   return { items, isLoading }
+}
+
+/** Single-session discussion list — for the discussion replay view (F5),
+ * as opposed to useDashboardDiscussions' cross-session composition. */
+export function useSessionDiscussions(sessionId: number | undefined) {
+  return useQuery({
+    queryKey: ['discussions', sessionId],
+    queryFn: () => apiFetch<DiscussionRecord[]>(`/sessions/${sessionId}/discussions`),
+    enabled: sessionId !== undefined,
+    staleTime: 30 * 1000,
+  })
 }
 
 /**

@@ -76,21 +76,57 @@ export interface MetricsResponse {
 
 export interface NotificationOut {
   id: number
-  officer_id: number
+  notification_type: 'assignment' | 'mention' | 'review_request' | 'review_decision' | 'board_update'
   session_id: number | null
-  kind: string
-  body: string
-  read: boolean
+  message: string
+  created_at: string
+  read_at: string | null
+}
+
+export type ActivityFeedKind = 'session' | 'ai_conversation' | 'discussion'
+
+export interface ActivityFeedItem {
+  kind: ActivityFeedKind
+  event_type: string
+  actor_officer_id: number | null
+  detail: string | null
   created_at: string
 }
 
-export interface ActivityFeedItem {
-  id: number
-  session_id: number
-  actor_officer_id: number | null
-  action: string
-  detail: string | null
-  created_at: string
+export interface PresenceEntry {
+  officer_id: number
+  status: 'viewing' | 'editing'
+  last_seen_at: string
+}
+
+export interface AgentOpinion {
+  agent_name: string
+  finding_type: string
+  claim: string
+  confidence: number
+  evidence: string[]
+  validated: boolean
+  missing_evidence: boolean
+  source_entities: string[]
+}
+
+export interface Disagreement {
+  entity_kind: string
+  entity_id: number
+  entity_label: string
+  opinions: AgentOpinion[]
+  confidence_spread: number
+  explanation: string
+}
+
+export interface ConsensusResult {
+  overall_confidence: number
+  per_agent_confidence: Record<string, number>
+  consensus_score: number
+  agreement_count: number
+  disagreement_count: number
+  recommended_conclusion: string
+  evidence_requests: string[]
 }
 
 export interface DiscussionRecord {
@@ -98,9 +134,9 @@ export interface DiscussionRecord {
   session_id: number
   turn_index: number
   query: string
-  opinions: unknown
-  disagreements: unknown
-  consensus: string | null
+  opinions: AgentOpinion[]
+  disagreements: Disagreement[]
+  consensus: ConsensusResult
   created_at: string
 }
 
@@ -192,6 +228,132 @@ export interface GraphResponse {
   edges: RawGraphEdge[]
   center?: string
 }
+
+export interface BoardIntelligence {
+  evidence_summary: { finding_count: number; persons_referenced: number }
+  suggested_links: {
+    from: string
+    to: string
+    label: string | null
+    confidence: number | null
+    reason: string
+  }[]
+  hidden_connections: { from: string; to: string; path: string[]; hops: number }[]
+  contradictions: {
+    rejected_finding: { agent: string; summary: string }
+    conflicts_with: { agent: string; summary: string }
+    shared_entities: string[]
+    note: string | null
+  }[]
+  missing_evidence: { agent: string; gap: string }[]
+  ai_generated_hypotheses: {
+    title: string
+    body: string
+    confidence: number
+    agent: string
+    source_entities: string[]
+  }[]
+  evidence_clusters: { label: string; member_count: number; finding_types: string[] }[]
+  replay: {
+    turn_index: number
+    query: string
+    resolved_query: string
+    summary: string
+    timestamp: string
+  }[]
+}
+
+export interface DecisionTimelineEntry {
+  turn_index: number
+  created_at: string
+  query: string
+  conclusion: string
+  finding_count: number
+}
+
+export type CommentTargetType = 'finding' | 'evidence' | 'entity' | 'board_object'
+export type BoardObjectType = 'note' | 'link' | 'hypothesis'
+export type ReviewStatus = 'draft' | 'in_review' | 'approved' | 'rejected'
+
+export interface Comment {
+  id: number
+  session_id: number
+  target_type: CommentTargetType
+  target_ref: string
+  author_officer_id: number | null
+  body: string
+  created_at: string
+  edited_at: string | null
+}
+
+export interface BoardObject {
+  id: number
+  session_id: number
+  object_type: BoardObjectType
+  content: string
+  payload: Record<string, unknown> | null
+  created_by_officer_id: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ReviewRequestRecord {
+  id: number
+  session_id: number
+  status: ReviewStatus
+  requested_by_officer_id: number | null
+  reviewer_officer_id: number | null
+  notes: string | null
+  decision_notes: string | null
+  created_at: string
+  decided_at: string | null
+}
+
+export type VoiceIntent =
+  | 'empty'
+  | 'open_case'
+  | 'close_case'
+  | 'reopen_case'
+  | 'archive_case'
+  | 'assign'
+  | 'open_board'
+  | 'read_report'
+  | 'generate_report'
+  | 'vehicle_owner'
+  | 'freeze_account'
+  | 'investigate'
+
+export interface VoiceCommandResult {
+  intent: VoiceIntent
+  spoken_response: string
+  session_id: number | null
+  data: Record<string, unknown>
+}
+
+export interface VoiceTranscribeResult {
+  text: string
+  language: string
+  confidence: number
+  provider: string
+  warnings: string[]
+}
+
+export interface VoiceQueryResult {
+  transcript: string
+  detected_language: string
+  working_transcript: string
+  intent: VoiceIntent
+  spoken_response_en: string
+  spoken_response: string
+  session_id: number | null
+  data: Record<string, unknown>
+  audio_base64: string | null
+  audio_content_type: string | null
+  audio_provider: string | null
+  warnings: string[]
+}
+
+export type VoiceCommandPhrases = Record<string, { en: string; kn: string }>
 
 export interface ApiError {
   status: number

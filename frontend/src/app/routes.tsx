@@ -9,6 +9,9 @@ import { UsersPage } from '@/admin/UsersPage'
 import { AuditLogPage } from '@/admin/AuditLogPage'
 import { GovernancePage } from '@/admin/GovernancePage'
 import { GraphPage } from '@/graph/GraphPage'
+import { InvestigationBoardPage } from '@/board/InvestigationBoardPage'
+import { VoicePage } from '@/voice/VoicePage'
+import { FindingsPage } from '@/findings/FindingsPage'
 
 export function AppRoutes() {
   return (
@@ -23,8 +26,14 @@ export function AppRoutes() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/investigations" element={<InvestigationsListPage />} />
             <Route path="/investigations/:id" element={<InvestigationDetailPage />} />
+            <Route path="/investigations/:id/board" element={<InvestigationBoardPage />} />
+            <Route path="/investigations/:id/findings" element={<FindingsPage />} />
             <Route path="/graph" element={<GraphPage />} />
             <Route path="/graph/:personId" element={<GraphPage />} />
+          </Route>
+
+          <Route element={<RequirePermission permission="use_voice" />}>
+            <Route path="/voice" element={<VoicePage />} />
           </Route>
 
           <Route element={<RequirePermission permission="manage_users" />}>

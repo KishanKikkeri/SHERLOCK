@@ -30,7 +30,7 @@ export function RecentDiscussions({ sessions }: { sessions: InvestigationSession
               <li key={d.id} className="py-2.5">
                 <p className="truncate text-sm font-medium text-text">{d.query}</p>
                 <p className="truncate text-xs text-muted">
-                  {d.consensus ?? 'No consensus reached'} · {formatRelativeTime(d.created_at)}
+                  {d.consensus?.recommended_conclusion ?? 'No consensus reached'} · {formatRelativeTime(d.created_at)}
                 </p>
               </li>
             ))}
