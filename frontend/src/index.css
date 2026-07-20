@@ -37,11 +37,14 @@
   --entity-phone: #F472B6;
   --entity-court: #94A3B8;
   --entity-location: #2DD4BF;
-  --entity-fir: #F59E0B;
+  --entity-fir: #C2410C;
   --entity-investigation: #818CF8;
   --entity-evidence: #FB7185;
   --entity-crime: #EF4444;
   --entity-property: #FACC15;
+  --entity-accused: #D946EF;
+  --entity-victim: #84CC16;
+  --entity-witness: #60A5FA;
 }
 
 .dark {
@@ -92,6 +95,9 @@
   --color-entity-evidence: var(--entity-evidence);
   --color-entity-crime: var(--entity-crime);
   --color-entity-property: var(--entity-property);
+  --color-entity-accused: var(--entity-accused);
+  --color-entity-victim: var(--entity-victim);
+  --color-entity-witness: var(--entity-witness);
 
   --font-sans: 'Fira Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace;

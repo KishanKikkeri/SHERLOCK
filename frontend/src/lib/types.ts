@@ -124,6 +124,75 @@ export interface RetentionPolicy {
   deletion_mode: string
 }
 
+// The 16 real node labels from backend/graph/schema.py NODE_LABELS.
+// Do not add "Investigation" or "Evidence" here — see
+// docs/stage-f/01-DESIGN-SYSTEM.md's correction note.
+export type GraphNodeType =
+  | 'Person'
+  | 'Crime'
+  | 'FIR'
+  | 'Location'
+  | 'Vehicle'
+  | 'Phone'
+  | 'BankAccount'
+  | 'Transaction'
+  | 'Accused'
+  | 'Victim'
+  | 'Witness'
+  | 'Officer'
+  | 'Court'
+  | 'Property'
+  | 'Weapon'
+  | 'Organization'
+
+// The 20 real relationship types from backend/graph/schema.py RELATIONSHIP_TYPES.
+export type GraphEdgeType =
+  | 'PERSON_COMMITTED_CRIME'
+  | 'PERSON_INVOLVED_IN_FIR'
+  | 'PERSON_ASSOCIATED_WITH'
+  | 'PERSON_LINKED_TO_PERSON'
+  | 'PERSON_OWNS_PHONE'
+  | 'PERSON_OWNS_ACCOUNT'
+  | 'PERSON_OWNS_VEHICLE'
+  | 'CRIME_OCCURRED_AT'
+  | 'CRIME_LINKED_TO_FIR'
+  | 'ACCOUNT_SENT_TRANSACTION'
+  | 'TRANSACTION_TO_ACCOUNT'
+  | 'ACCUSED_IN'
+  | 'VICTIM_IN'
+  | 'WITNESS_OF'
+  | 'INVESTIGATED_BY'
+  | 'ARRESTED_IN'
+  | 'CHARGESHEETED_IN'
+  | 'SEIZED_AT'
+  | 'RECOVERED_FROM'
+  | 'CALLS'
+  | 'USES'
+
+export interface GraphNodeData {
+  id: number
+  [field: string]: unknown
+}
+
+export interface RawGraphNode {
+  id: string
+  label: string
+  type: GraphNodeType
+  data: GraphNodeData
+}
+
+export interface RawGraphEdge {
+  source: string
+  target: string
+  type: GraphEdgeType
+}
+
+export interface GraphResponse {
+  nodes: RawGraphNode[]
+  edges: RawGraphEdge[]
+  center?: string
+}
+
 export interface ApiError {
   status: number
   detail: string

@@ -8,6 +8,7 @@ import { InvestigationDetailPage } from '@/investigations/InvestigationDetailPag
 import { UsersPage } from '@/admin/UsersPage'
 import { AuditLogPage } from '@/admin/AuditLogPage'
 import { GovernancePage } from '@/admin/GovernancePage'
+import { GraphPage } from '@/graph/GraphPage'
 
 export function AppRoutes() {
   return (
@@ -22,6 +23,8 @@ export function AppRoutes() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/investigations" element={<InvestigationsListPage />} />
             <Route path="/investigations/:id" element={<InvestigationDetailPage />} />
+            <Route path="/graph" element={<GraphPage />} />
+            <Route path="/graph/:personId" element={<GraphPage />} />
           </Route>
 
           <Route element={<RequirePermission permission="manage_users" />}>

@@ -5,6 +5,7 @@ import {
   Users,
   ScrollText,
   ShieldCheck,
+  Network,
 } from 'lucide-react'
 import { hasPermission } from '@/lib/permissions'
 import type { Permission, Role } from '@/lib/types'
@@ -23,6 +24,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, requiredPermission: 'view_case' },
   { label: 'Investigations', path: '/investigations', icon: FolderSearch, requiredPermission: 'view_case' },
+  { label: 'Network', path: '/graph', icon: Network, requiredPermission: 'view_case' },
   { label: 'Users', path: '/admin/users', icon: Users, requiredPermission: 'manage_users' },
   { label: 'Audit log', path: '/admin/audit', icon: ScrollText, requiredPermission: 'view_audit' },
   { label: 'Governance', path: '/admin/governance', icon: ShieldCheck, requiredPermission: 'administer_system' },
