@@ -21,7 +21,8 @@ export function GraphLegend({
   if (typesPresent.length === 0) return null
 
   return (
-    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by entity type">
+    <fieldset className="flex flex-wrap gap-1.5 border-0 p-0 m-0">
+      <legend className="sr-only">Filter by entity type</legend>
       {typesPresent.map((type) => {
         const meta = ENTITY_META[type]
         const isVisible = visibleTypes.has(type)
@@ -49,6 +50,6 @@ export function GraphLegend({
           </button>
         )
       })}
-    </div>
+    </fieldset>
   )
 }

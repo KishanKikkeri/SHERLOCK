@@ -117,33 +117,35 @@ export function GraphPage() {
         pathFound={pathFound}
       />
 
-      <div className="grid min-h-0 flex-1 grid-cols-[1fr_280px] gap-3">
-        {isLoading ? (
-          <Skeleton className="h-full w-full" />
-        ) : isError || !data ? (
-          <Card className="flex items-center justify-center">
-            <EmptyState
-              icon={<Network className="h-6 w-6" />}
-              title="Couldn't load this graph"
-              description={`No person with id ${centerId}, or you don't have permission to view it.`}
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[1fr_280px]">
+        <div className="min-h-[420px] lg:min-h-0">
+          {isLoading ? (
+            <Skeleton className="h-full w-full" />
+          ) : isError || !data ? (
+            <Card className="flex h-full items-center justify-center">
+              <EmptyState
+                icon={<Network className="h-6 w-6" />}
+                title="Couldn't load this graph"
+                description={`No person with id ${centerId}, or you don't have permission to view it.`}
+              />
+            </Card>
+          ) : (
+            <GraphView
+              nodes={nodes}
+              edges={edges}
+              center={data.center}
+              visibleTypes={visibleTypes}
+              clustering={clustering}
+              showEdgeLabels={showEdgeLabels}
+              focusNodeId={focusNodeId}
+              pathNodeIds={pathNodeIds}
+              pathEdgeKeys={pathEdgeKeys}
+              selectedNodeId={selectedNode?.id ?? null}
+              onSelectNode={handleSelectNode}
+              onZoomReady={setZoomApi}
             />
-          </Card>
-        ) : (
-          <GraphView
-            nodes={nodes}
-            edges={edges}
-            center={data.center}
-            visibleTypes={visibleTypes}
-            clustering={clustering}
-            showEdgeLabels={showEdgeLabels}
-            focusNodeId={focusNodeId}
-            pathNodeIds={pathNodeIds}
-            pathEdgeKeys={pathEdgeKeys}
-            selectedNodeId={selectedNode?.id ?? null}
-            onSelectNode={handleSelectNode}
-            onZoomReady={setZoomApi}
-          />
-        )}
+          )}
+        </div>
 
         <div className="flex flex-col gap-3 overflow-y-auto">
           <GraphLegend nodes={nodes} visibleTypes={visibleTypes} onToggleType={toggleType} />

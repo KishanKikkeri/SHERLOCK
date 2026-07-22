@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { useAuth } from '@/auth/AuthProvider'
 import { hasPermission } from '@/lib/permissions'
 import { formatRelativeTime } from '@/lib/format'
+import { useToast } from '@/components/layout/ToastProvider'
 import type { BoardObjectType } from '@/lib/types'
 
 const KIND_TO_OBJECT_TYPE: Record<BoardCard['kind'], BoardObjectType> = {
@@ -35,6 +36,7 @@ export function CardDetailPanel({
   const { data: comments, isLoading: commentsLoading } = useComments(sessionId, 'board_object', targetRef)
   const addComment = useAddComment(sessionId)
   const [commentBody, setCommentBody] = useState('')
+  const toast = useToast()
 
   async function handleShare() {
     const obj = await createBoardObject.mutateAsync({
@@ -44,6 +46,7 @@ export function CardDetailPanel({
       created_by_officer_id: user?.officer_id ?? undefined,
     })
     onShared(obj.id)
+    toast.show('Card shared with team')
   }
 
   function handleAddComment(e: FormEvent) {
@@ -56,7 +59,12 @@ export function CardDetailPanel({
         body: commentBody.trim(),
         author_officer_id: user?.officer_id ?? undefined,
       },
-      { onSuccess: () => setCommentBody('') },
+      {
+        onSuccess: () => {
+          setCommentBody('')
+          toast.show('Comment posted')
+        },
+      },
     )
   }
 

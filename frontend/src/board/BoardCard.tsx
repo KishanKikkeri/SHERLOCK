@@ -23,6 +23,7 @@ interface Props {
   onEdit: (id: string, patch: Partial<BoardCard>) => void
   onDelete: (id: string) => void
   onToggleSelect: (id: string, e: React.MouseEvent) => void
+  onSelect: (id: string) => void
 }
 
 function BoardCardViewInner({
@@ -35,6 +36,7 @@ function BoardCardViewInner({
   onEdit,
   onDelete,
   onToggleSelect,
+  onSelect,
 }: Props) {
   const [editing, setEditing] = useState(false)
   const entityMeta = card.entityType ? ENTITY_META[card.entityType] : null
@@ -50,6 +52,7 @@ function BoardCardViewInner({
         highlighted && 'ring-2 ring-accent',
         selected && 'ring-2 ring-ring',
         card.groupColor && 'outline outline-dashed outline-1',
+        'outline-none focus-visible:ring-2 focus-visible:ring-ring',
       )}
       style={{
         left: card.x,
@@ -61,11 +64,32 @@ function BoardCardViewInner({
         outlineColor: card.groupColor,
         cursor: 'grab',
       }}
+      // can't be a native <button>: this card nests an <input>/<textarea>
+      // and other <button>s in edit mode, and HTML forbids interactive
+      // content inside a real <button>. role="button" on a div is the
+      // only valid option here, not a shortcut.
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+      role="button"
+      tabIndex={0}
+      aria-label={`${card.kind} card: ${card.title}`}
       onPointerDown={(e) => onPointerDown(card.id, e)}
       onClick={(e) => {
         if (e.shiftKey) onToggleSelect(card.id, e)
       }}
       onDoubleClick={() => setEditing(true)}
+      onKeyDown={(e) => {
+        // Keyboard parity with the primary (non-shift) click action —
+        // dragging a card is inherently pointer-based and out of scope
+        // for keyboard, same tradeoff as the graph's nodes, but every
+        // card should at least be reachable and selectable without a mouse.
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect(card.id)
+        } else if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault()
+          onDelete(card.id)
+        }
+      }}
     >
       <div className="flex items-center gap-1">
         {card.kind === 'evidence' && card.entityType && (

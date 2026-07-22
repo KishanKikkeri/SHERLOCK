@@ -184,6 +184,12 @@ export function GraphView({
 
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden rounded-lg border border-border bg-surface">
+      {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- this is a
+          drawing canvas, not a control; its onClick is a supplementary "click empty
+          space to deselect" convenience, with a real keyboard equivalent (Escape,
+          below). The actual interactive content is the individually-focusable child
+          nodes, each already carrying role="button"/tabIndex. Giving the canvas itself
+          a role would misrepresent it to assistive tech. */}
       <svg
         ref={svgRef}
         width={dims.width}
@@ -191,6 +197,13 @@ export function GraphView({
         className="cursor-grab active:cursor-grabbing"
         onClick={(e) => {
           if (e.target === svgRef.current) onSelectNode(null)
+        }}
+        onKeyDown={(e) => {
+          // Keyboard equivalent of clicking empty canvas to deselect —
+          // nodes are individually focusable/keyboard-activatable (see
+          // role="button" below), Escape clears selection the same way
+          // a background click does for mouse users.
+          if (e.key === 'Escape') onSelectNode(null)
         }}
       >
         <g ref={zoomLayerRef} data-graph-layer>
@@ -264,6 +277,10 @@ export function GraphView({
                       else nodeElsRef.current.delete(n.id)
                     }}
                     data-node-id={n.id}
+                    // <g> can't be a native <button> (SVG grouping element, not HTML);
+                    // role="button" + tabIndex + onKeyDown is the standard accessible
+                    // pattern for interactive SVG graphics.
+                    // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
                     role="button"
                     tabIndex={0}
                     aria-label={`${meta.label}: ${n.label}`}

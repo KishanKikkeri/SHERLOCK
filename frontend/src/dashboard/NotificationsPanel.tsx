@@ -40,6 +40,7 @@ export function NotificationsPanel() {
                 <button
                   type="button"
                   onClick={() => !n.read_at && markRead.mutate(n.id)}
+                  aria-label={n.read_at ? `Notification: ${n.message}` : `Unread notification: ${n.message}. Activate to mark as read.`}
                   className="flex w-full cursor-pointer items-start gap-2 py-2.5 text-left hover:bg-surface-raised"
                 >
                   <span

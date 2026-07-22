@@ -373,10 +373,10 @@ export function InvestigationBoardPage() {
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[1fr_300px] gap-3">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[1fr_300px]">
         <div
           ref={canvasRef}
-          className="relative overflow-hidden rounded-lg border border-border bg-surface"
+          className="relative min-h-[420px] overflow-hidden rounded-lg border border-border bg-surface lg:min-h-0"
           onPointerDown={onCanvasPointerDown}
           onPointerMove={(e) => {
             onCanvasPointerMove(e)
@@ -415,6 +415,7 @@ export function InvestigationBoardPage() {
                   if (selectedCardId === cid) setSelectedCardId(null)
                 }}
                 onToggleSelect={(cid) => toggleSelect(cid)}
+                onSelect={(cid) => setSelectedCardId(cid)}
               />
             ))}
           </div>

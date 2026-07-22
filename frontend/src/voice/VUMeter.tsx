@@ -3,7 +3,12 @@ export function VUMeter({ level, className }: { level: number; className?: strin
   return (
     <div
       className={className}
-      role="meter"
+      // native <progress> can't be reliably re-colored cross-browser
+      // (WebKit/Gecko pseudo-elements diverge); role="progressbar" +
+      // aria-value* on a styled div is the standard fallback for a
+      // custom-colored level bar.
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+      role="progressbar"
       aria-label="Microphone level"
       aria-valuenow={pct}
       aria-valuemin={0}
