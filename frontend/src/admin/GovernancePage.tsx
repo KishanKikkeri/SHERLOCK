@@ -11,7 +11,7 @@ export function GovernancePage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-lg font-semibold text-text">Governance</h1>
+        <h1 className="text-2xl font-semibold text-text">Governance</h1>
         <p className="text-sm text-muted">Data retention policy for this deployment.</p>
       </div>
 

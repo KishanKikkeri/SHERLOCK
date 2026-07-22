@@ -294,7 +294,7 @@ export function InvestigationBoardPage() {
       {!presenting && (
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-semibold text-text">Investigation board</h1>
+            <h1 className="text-2xl font-semibold text-text">Investigation board</h1>
             <p className="text-xs text-muted">{session?.title ?? `Session #${sessionId}`}</p>
           </div>
           <Button variant="ghost" size="sm" onClick={() => navigate(`/investigations/${sessionId}`)}>
@@ -387,7 +387,11 @@ export function InvestigationBoardPage() {
             onCardPointerUp(e)
           }}
           onWheel={onWheel}
-          style={{ cursor: linkMode ? 'crosshair' : panState.current ? 'grabbing' : 'grab' }}
+          style={{
+            cursor: linkMode ? 'crosshair' : panState.current ? 'grabbing' : 'grab',
+            backgroundImage: 'radial-gradient(circle, var(--border-subtle) 1px, transparent 1px)',
+            backgroundSize: '24px 24px',
+          }}
         >
           <div
             className="absolute left-0 top-0"

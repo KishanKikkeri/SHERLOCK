@@ -68,7 +68,7 @@ export function GraphPage() {
     return (
       <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-lg font-semibold text-text">Network graph</h1>
+          <h1 className="text-2xl font-semibold text-text">Network graph</h1>
           <p className="text-sm text-muted">Explore relationships around a person.</p>
         </div>
         <Card>
@@ -91,7 +91,7 @@ export function GraphPage() {
     <div className="flex h-[calc(100vh-56px-48px)] flex-col gap-3">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-text">Network graph</h1>
+          <h1 className="text-2xl font-semibold text-text">Network graph</h1>
           <p className="font-mono text-xs text-muted">Centered on Person:{centerId}</p>
         </div>
       </div>

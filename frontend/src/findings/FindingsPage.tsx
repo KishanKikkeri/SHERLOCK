@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Lightbulb, AlertTriangle, FileQuestion } from 'lucide-react'
+import { ArrowLeft, Lightbulb, TriangleAlert as AlertTriangle, FileQuestionMark as FileQuestion } from 'lucide-react'
 import { useBoardIntelligence } from '@/lib/queries/board'
 import { useSession } from '@/lib/queries/sessions'
 import { FindingCard } from './FindingCard'
@@ -36,7 +36,7 @@ export function FindingsPage() {
       </Link>
 
       <div>
-        <h1 className="text-lg font-semibold text-text">Findings</h1>
+        <h1 className="text-2xl font-semibold text-text">Findings</h1>
         <p className="text-xs text-muted">{session?.title ?? `Session #${sessionId}`}</p>
       </div>
 

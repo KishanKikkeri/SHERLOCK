@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { useSessions } from '@/lib/queries/sessions'
 import { priorityTone } from '@/lib/status-tone'
 import { formatRelativeTime } from '@/lib/format'
+import { cn } from '@/lib/cn'
 
 export function ActiveInvestigations() {
   const { data, isLoading } = useSessions({ status: 'open' })
@@ -14,15 +15,16 @@ export function ActiveInvestigations() {
     <Card>
       <CardHeader
         title="Active investigations"
+        subtitle={data ? `${data.length} open` : undefined}
         action={
           <Link to="/investigations" className="text-xs font-medium text-accent hover:underline">
             View all
           </Link>
         }
       />
-      <CardBody>
+      <CardBody className="p-0">
         {isLoading ? (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 p-5">
             {[...Array(3)].map((_, i) => (
               <Skeleton key={i} className="h-12 w-full" />
             ))}
@@ -39,7 +41,10 @@ export function ActiveInvestigations() {
               <li key={session.id}>
                 <Link
                   to={`/investigations/${session.id}`}
-                  className="flex items-center justify-between gap-3 py-2.5 hover:opacity-80"
+                  className={cn(
+                    'flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-surface-raised/50',
+                    session.priority === 'critical' && 'border-l-2 border-l-critical',
+                  )}
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-text">{session.title}</p>

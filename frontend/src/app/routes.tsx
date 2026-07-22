@@ -30,6 +30,7 @@ const AnalyticsPage = lazy(() => import('@/analytics/AnalyticsPage').then((m) =>
 const UsersPage = lazy(() => import('@/admin/UsersPage').then((m) => ({ default: m.UsersPage })))
 const AuditLogPage = lazy(() => import('@/admin/AuditLogPage').then((m) => ({ default: m.AuditLogPage })))
 const GovernancePage = lazy(() => import('@/admin/GovernancePage').then((m) => ({ default: m.GovernancePage })))
+const StyleguidePage = lazy(() => import('@/styleguide/StyleguidePage').then((m) => ({ default: m.StyleguidePage })))
 
 function Lazy({ children }: { children: React.ReactNode }) {
   return (
@@ -74,6 +75,8 @@ export function AppRoutes() {
           <Route element={<RequirePermission permission="administer_system" />}>
             <Route path="/admin/governance" element={<Lazy><GovernancePage /></Lazy>} />
           </Route>
+
+          <Route path="/styleguide" element={<Lazy><StyleguidePage /></Lazy>} />
         </Route>
       </Route>
 
