@@ -8,8 +8,13 @@ export function KeyboardShortcutsHelp({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const dialog = dialogRef.current
-    dialog?.showModal()
-    return () => dialog?.close()
+    if (dialog && !dialog.open) dialog.showModal()
+    // No cleanup call to dialog.close() here: unmounting already removes the
+    // node (and its top-layer modal) from the DOM, and calling close()
+    // ourselves fires the dialog's native "close" event, which re-enters
+    // onClose()/setHelpOpen(false). Under React StrictMode's dev-only
+    // double-invoke of effects, that re-entrancy closed the panel in the
+    // same tick it opened, so the icon appeared to do nothing.
   }, [])
 
   return (
