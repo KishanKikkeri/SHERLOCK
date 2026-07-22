@@ -1,12 +1,17 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { ScanSearch } from 'lucide-react'
+import { ScanSearch, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useAuth } from './AuthProvider'
 import { useLogin } from '@/lib/queries/auth'
 import { isApiError } from '@/lib/api-client'
 
+/**
+ * Login — single focal action, no marketing chrome.
+ * Reference: Linear's login — centered card, ambient gradient backdrop,
+ * brand mark above the fold, error state inline.
+ */
 export function LoginPage() {
   const { isAuthenticated, isBooting } = useAuth()
   const location = useLocation()
@@ -39,17 +44,33 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center gap-2 text-center">
-          <ScanSearch className="h-8 w-8 text-accent" aria-hidden />
-          <h1 className="text-xl font-semibold text-text">SHERLOCK</h1>
-          <p className="text-sm text-muted">Sign in to continue your investigations.</p>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4">
+      {/* Ambient backdrop — subtle radial gradient, not a marketing hero.
+          Reference: Vercel dashboard login's quiet depth. */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-60"
+        style={{
+          background:
+            'radial-gradient(ellipse 80% 50% at 50% 0%, var(--accent-dim), transparent 70%)',
+        }}
+      />
+
+      <div className="relative z-10 w-full max-w-sm">
+        <div className="mb-8 flex flex-col items-center gap-3 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-border bg-surface shadow-md">
+            <ScanSearch className="h-6 w-6 text-accent" aria-hidden />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-text">SHERLOCK</h1>
+            <p className="mt-1 text-sm text-muted">
+              Sign in to continue your investigations.
+            </p>
+          </div>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-6"
+          className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-6 shadow-lg"
         >
           <Input
             label="Username"
@@ -71,9 +92,13 @@ export function LoginPage() {
             error={formError ?? undefined}
           />
           <Button type="submit" isLoading={login.isPending} className="mt-2 w-full">
-            Sign in
+            <Lock className="h-4 w-4" /> Sign in
           </Button>
         </form>
+
+        <p className="mt-6 text-center text-xs text-subtle">
+          Authorized personnel only. All access is logged and audited.
+        </p>
       </div>
     </div>
   )

@@ -4,6 +4,7 @@ import { Card, CardBody, EmptyState } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Button } from '@/components/ui/Button'
+import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table'
 import {
   useAdminUsers,
   useGrantRole,
@@ -31,7 +32,7 @@ export function UsersPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-lg font-semibold text-text">Users</h1>
+        <h1 className="text-2xl font-semibold text-text">Users</h1>
         <p className="text-sm text-muted">Manage accounts and role assignments.</p>
       </div>
 
@@ -50,29 +51,27 @@ export function UsersPage() {
               description="Accounts created via POST /admin/users will appear here."
             />
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs text-muted">
-                  <th className="px-4 py-2 font-medium">User</th>
-                  <th className="px-4 py-2 font-medium">Roles</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2 font-medium">Add role</th>
-                  <th className="px-4 py-2">
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+            <Table>
+              <THead>
+                <TR>
+                  <TH>User</TH>
+                  <TH>Roles</TH>
+                  <TH>Status</TH>
+                  <TH>Add role</TH>
+                  <TH><span className="sr-only">Actions</span></TH>
+                </TR>
+              </THead>
+              <TBody>
                 {users.map((u) => {
                   const availableToAdd = ALL_ROLES.filter((r) => !u.roles.includes(r))
                   const draft = roleDraft[u.id] ?? availableToAdd[0]
                   return (
-                    <tr key={u.id}>
-                      <td className="px-4 py-3">
+                    <TR key={u.id}>
+                      <TD>
                         <p className="text-text">{u.full_name ?? u.username}</p>
                         <p className="text-xs text-muted">{u.username}</p>
-                      </td>
-                      <td className="px-4 py-3">
+                      </TD>
+                      <TD>
                         <div className="flex flex-wrap gap-1">
                           {u.roles.map((r) => (
                             <Badge key={r} tone="info" className="gap-1">
@@ -88,13 +87,13 @@ export function UsersPage() {
                             </Badge>
                           ))}
                         </div>
-                      </td>
-                      <td className="px-4 py-3">
+                      </TD>
+                      <TD>
                         <Badge tone={u.is_active ? 'positive' : 'neutral'}>
                           {u.is_active ? 'Active' : 'Deactivated'}
                         </Badge>
-                      </td>
-                      <td className="px-4 py-3">
+                      </TD>
+                      <TD>
                         {availableToAdd.length > 0 && (
                           <div className="flex items-center gap-2">
                             <select
@@ -122,8 +121,8 @@ export function UsersPage() {
                             </Button>
                           </div>
                         )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
+                      </TD>
+                      <TD className="text-right">
                         <Button
                           size="sm"
                           variant={u.is_active ? 'destructive' : 'secondary'}
@@ -131,12 +130,12 @@ export function UsersPage() {
                         >
                           {u.is_active ? 'Deactivate' : 'Reactivate'}
                         </Button>
-                      </td>
-                    </tr>
+                      </TD>
+                    </TR>
                   )
                 })}
-              </tbody>
-            </table>
+              </TBody>
+            </Table>
           )}
         </CardBody>
       </Card>

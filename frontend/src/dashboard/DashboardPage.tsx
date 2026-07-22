@@ -1,4 +1,4 @@
-import { Users, FileWarning, Gavel, Network } from 'lucide-react'
+import { Users, MailWarning as FileWarning, Network, Gavel, FolderOpen } from 'lucide-react'
 import { useSessions } from '@/lib/queries/sessions'
 import { useMetrics } from '@/lib/queries/system'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -7,58 +7,113 @@ import { AssignedCases } from './AssignedCases'
 import { NotificationsPanel } from './NotificationsPanel'
 import { ActivityFeed } from './ActivityFeed'
 import { RecentDiscussions } from './RecentDiscussions'
+import { cn } from '@/lib/cn'
 
-function MetricTile({
-  icon: Icon,
-  label,
-  value,
-  isLoading,
+/**
+ * KPI strip — not equal-sized boxes. The first tile (open investigations)
+ * gets double width because it's the most actionable. Metrics get a
+ * compact, scannable row. Reference: Defender XDR's severity-weighted
+ * KPI hierarchy, Linear's dashboard density.
+ */
+function KpiStrip({
+  metrics,
+  metricsLoading,
+  openCount,
 }: {
-  icon: typeof Users
-  label: string
-  value: number | undefined
-  isLoading: boolean
+  metrics: { persons?: number; firs?: number; relationships?: number; repeat_offenders?: number } | undefined
+  metricsLoading: boolean
+  openCount: number
 }) {
+  const tiles = [
+    { icon: FolderOpen, label: 'Open investigations', value: openCount, accent: true, span: 'lg:col-span-2' },
+    { icon: Users, label: 'Persons of interest', value: metrics?.persons },
+    { icon: FileWarning, label: 'Open FIRs', value: metrics?.firs },
+    { icon: Network, label: 'Known relationships', value: metrics?.relationships },
+    { icon: Gavel, label: 'Repeat offenders', value: metrics?.repeat_offenders },
+  ]
+
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-surface p-4">
-      <Icon className="h-5 w-5 text-accent" aria-hidden />
-      <div>
-        {isLoading ? (
-          <Skeleton className="h-6 w-12" />
-        ) : (
-          <p className="font-mono text-lg font-semibold text-text">{value ?? '—'}</p>
-        )}
-        <p className="text-xs text-muted">{label}</p>
-      </div>
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+      {tiles.map((t) => (
+        <div
+          key={t.label}
+          className={cn(
+            'flex items-center gap-3 rounded-lg border bg-surface p-4 transition-colors',
+            t.accent
+              ? 'border-accent/30 bg-accent/5'
+              : 'border-border hover:border-border-strong',
+            t.span,
+          )}
+        >
+          <t.icon
+            className={cn('h-5 w-5 shrink-0', t.accent ? 'text-accent' : 'text-muted')}
+            aria-hidden
+          />
+          <div className="min-w-0">
+            {metricsLoading && !t.accent ? (
+              <Skeleton className="h-6 w-12" />
+            ) : (
+              <p
+                className={cn(
+                  'font-mono font-semibold text-text',
+                  t.accent ? 'text-2xl' : 'text-lg',
+                )}
+              >
+                {t.value ?? '—'}
+              </p>
+            )}
+            <p className="truncate text-xs text-muted">{t.label}</p>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
 
 export function DashboardPage() {
-  // All open + owned sessions feed the activity/discussions composition
-  // panels too, so fetch once here and pass down rather than each panel
-  // re-fetching its own copy of "recent sessions."
   const { data: openSessions } = useSessions({ status: 'open' })
   const { data: metrics, isLoading: metricsLoading } = useMetrics(true)
 
+  const openCount = openSessions?.length ?? 0
+  const criticalCount = openSessions?.filter((s) => s.priority === 'critical').length ?? 0
+
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-lg font-semibold text-text">Dashboard</h1>
-        <p className="text-sm text-muted">An overview of what's active across SHERLOCK.</p>
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-text">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted">
+            Operational overview across all active investigations.
+          </p>
+        </div>
+        {criticalCount > 0 && (
+          <div className="flex items-center gap-2 rounded-md border border-critical/30 bg-critical-dim px-3 py-1.5">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-critical" aria-hidden />
+            <span className="text-sm font-medium text-critical">
+              {criticalCount} critical priority
+            </span>
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <MetricTile icon={Users} label="Persons of interest" value={metrics?.persons} isLoading={metricsLoading} />
-        <MetricTile icon={FileWarning} label="Open FIRs" value={metrics?.firs} isLoading={metricsLoading} />
-        <MetricTile icon={Network} label="Known relationships" value={metrics?.relationships} isLoading={metricsLoading} />
-        <MetricTile icon={Gavel} label="Repeat offenders" value={metrics?.repeat_offenders} isLoading={metricsLoading} />
+      <KpiStrip metrics={metrics} metricsLoading={metricsLoading} openCount={openCount} />
+
+      {/* Primary workspace: 2/3 width active investigations + assigned,
+          1/3 width notifications. Reference: Linear's dashboard —
+          activity-forward, not a stat dump. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="flex flex-col gap-4 lg:col-span-2">
+          <ActiveInvestigations />
+          <AssignedCases />
+        </div>
+        <div className="flex flex-col gap-4">
+          <NotificationsPanel />
+        </div>
       </div>
 
+      {/* Secondary row: discussions + activity feed — equal weight,
+          both are temporal streams. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ActiveInvestigations />
-        <AssignedCases />
-        <NotificationsPanel />
         <RecentDiscussions sessions={openSessions} />
         <ActivityFeed sessions={openSessions} />
       </div>

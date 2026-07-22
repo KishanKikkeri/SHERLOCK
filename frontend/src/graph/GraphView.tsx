@@ -183,7 +183,7 @@ export function GraphView({
   const visibleEdges = edges.filter(isEdgeVisible)
 
   return (
-    <div ref={containerRef} className="relative h-full w-full overflow-hidden rounded-lg border border-border bg-surface">
+    <div ref={containerRef} className="relative h-full w-full overflow-hidden rounded-lg border border-border bg-surface" style={{ backgroundImage: 'radial-gradient(circle, var(--border-subtle) 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
       {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- this is a
           drawing canvas, not a control; its onClick is a supplementary "click empty
           space to deselect" convenience, with a real keyboard equivalent (Escape,

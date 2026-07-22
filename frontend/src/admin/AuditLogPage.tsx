@@ -4,6 +4,7 @@ import { Card, CardBody, EmptyState } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Input } from '@/components/ui/Input'
+import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table'
 import { useAuditLog } from '@/lib/queries/governance'
 import { formatRelativeTime } from '@/lib/format'
 
@@ -15,7 +16,7 @@ export function AuditLogPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-text">Audit log</h1>
+          <h1 className="text-2xl font-semibold text-text">Audit log</h1>
           <p className="text-sm text-muted">Every recorded login, permission check, and export.</p>
         </div>
         <div className="w-56">
@@ -42,34 +43,34 @@ export function AuditLogPage() {
               description="Nothing matches this filter yet."
             />
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs text-muted">
-                  <th className="px-4 py-2 font-medium">When</th>
-                  <th className="px-4 py-2 font-medium">Actor</th>
-                  <th className="px-4 py-2 font-medium">Action</th>
-                  <th className="px-4 py-2 font-medium">Target</th>
-                  <th className="px-4 py-2 font-medium">Result</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+            <Table>
+              <THead>
+                <TR>
+                  <TH>When</TH>
+                  <TH>Actor</TH>
+                  <TH>Action</TH>
+                  <TH>Target</TH>
+                  <TH>Result</TH>
+                </TR>
+              </THead>
+              <TBody>
                 {data.map((entry) => (
-                  <tr key={entry.id}>
-                    <td className="px-4 py-2.5 font-mono text-xs text-muted">
+                  <TR key={entry.id}>
+                    <TD className="font-mono text-xs text-muted">
                       {formatRelativeTime(entry.created_at)}
-                    </td>
-                    <td className="px-4 py-2.5 text-text">{entry.username ?? '—'}</td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-text">{entry.action}</td>
-                    <td className="px-4 py-2.5 text-xs text-muted">{entry.target ?? '—'}</td>
-                    <td className="px-4 py-2.5">
+                    </TD>
+                    <TD className="text-text">{entry.username ?? '—'}</TD>
+                    <TD className="font-mono text-xs text-text">{entry.action}</TD>
+                    <TD className="text-xs text-muted">{entry.target ?? '—'}</TD>
+                    <TD>
                       <Badge tone={entry.success ? 'positive' : 'critical'}>
                         {entry.success ? 'Success' : 'Failed'}
                       </Badge>
-                    </td>
-                  </tr>
+                    </TD>
+                  </TR>
                 ))}
-              </tbody>
-            </table>
+              </TBody>
+            </Table>
           )}
         </CardBody>
       </Card>

@@ -5,7 +5,7 @@ import { Card, CardBody, EmptyState } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { Button } from '@/components/ui/Button'
+import { Tabs } from '@/components/ui/Tabs'
 import { useSessions } from '@/lib/queries/sessions'
 import { priorityTone, statusTone } from '@/lib/status-tone'
 import { formatRelativeTime } from '@/lib/format'
@@ -31,12 +31,16 @@ export function InvestigationsListPage() {
       : true,
   )
 
+  const tabValue = status ?? 'all'
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-text">Investigations</h1>
-          <p className="text-sm text-muted">All sessions you have access to.</p>
+          <h1 className="text-2xl font-semibold text-text">Investigations</h1>
+          <p className="mt-1 text-sm text-muted">
+            All sessions you have access to.
+          </p>
         </div>
         <div className="w-64">
           <Input
@@ -47,27 +51,20 @@ export function InvestigationsListPage() {
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-border">
-        {STATUS_TABS.map((tab) => (
-          <Button
-            key={tab.label}
-            variant="ghost"
-            size="sm"
-            onClick={() => setStatus(tab.value)}
-            className={cn(
-              'rounded-none border-b-2',
-              status === tab.value ? 'border-accent text-accent' : 'border-transparent',
-            )}
-          >
-            {tab.label}
-          </Button>
-        ))}
-      </div>
+      <Tabs
+        items={STATUS_TABS.map((t) => ({
+          label: t.label,
+          value: t.value ?? 'all',
+          count: t.value === undefined ? data?.length : data?.filter((s) => s.status === t.value).length,
+        }))}
+        value={tabValue}
+        onChange={(v) => setStatus(v === 'all' ? undefined : v as SessionStatus)}
+      />
 
       <Card>
-        <CardBody>
+        <CardBody className="p-0">
           {isLoading ? (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 p-5">
               {[...Array(5)].map((_, i) => (
                 <Skeleton key={i} className="h-14 w-full" />
               ))}
@@ -88,7 +85,10 @@ export function InvestigationsListPage() {
                 <li key={session.id}>
                   <Link
                     to={`/investigations/${session.id}`}
-                    className="flex items-center justify-between gap-3 py-3 hover:opacity-80"
+                    className={cn(
+                      'flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-surface-raised/50',
+                      session.priority === 'critical' && 'border-l-2 border-l-critical',
+                    )}
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-text">{session.title}</p>

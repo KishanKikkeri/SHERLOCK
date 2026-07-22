@@ -118,7 +118,7 @@ export function VoicePage() {
     <div className="flex h-[calc(100vh-56px-48px)] flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-text">Voice</h1>
+          <h1 className="text-2xl font-semibold text-text">Voice</h1>
           <p className="text-xs text-muted">
             {sessionId ? `Attached to session #${sessionId}` : 'No session attached — voice commands that need one will ask'}
           </p>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Users, FileWarning, Network, Gavel, Landmark, ShieldAlert } from 'lucide-react'
+import { Users, MailWarning as FileWarning, Network, Gavel, Landmark, ShieldAlert } from 'lucide-react'
 import { ANALYTICS_TOPICS } from './topics'
 import { AnalyticsTopicCard } from './AnalyticsTopicCard'
 import { useMetrics } from '@/lib/queries/system'
@@ -37,7 +37,7 @@ export function AnalyticsPage() {
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-text">Analytics</h1>
+          <h1 className="text-2xl font-semibold text-text">Analytics</h1>
           <p className="text-sm text-muted">
             Real numbers where they exist; everything else runs a live query against the actual
             investigation agents — see each card's badge for which one.
