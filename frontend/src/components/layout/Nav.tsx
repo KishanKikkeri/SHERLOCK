@@ -1,14 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import {
-  LayoutDashboard,
-  FolderSearch,
-  Users,
-  ScrollText,
-  ShieldCheck,
-  Network,
-  Mic,
-  BarChart3,
-} from 'lucide-react'
+import { LayoutDashboard, FolderSearch, Users, ShieldCheck, Network, Mic, ChartBar as BarChart3 } from 'lucide-react'
 import { hasPermission } from '@/lib/permissions'
 import type { Permission, Role } from '@/lib/types'
 import { cn } from '@/lib/cn'
@@ -30,7 +21,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Voice', path: '/voice', icon: Mic, requiredPermission: 'use_voice' },
   { label: 'Analytics', path: '/analytics', icon: BarChart3, requiredPermission: 'view_case' },
   { label: 'Users', path: '/admin/users', icon: Users, requiredPermission: 'manage_users' },
-  { label: 'Audit log', path: '/admin/audit', icon: ScrollText, requiredPermission: 'view_audit' },
   { label: 'Governance', path: '/admin/governance', icon: ShieldCheck, requiredPermission: 'administer_system' },
 ]
 
