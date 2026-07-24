@@ -7,6 +7,12 @@ Endpoints:
     GET /graph/{person_id}   Subgraph around a person (for the vis panel)
     GET /health              Liveness probe
     POST /export/pdf         PDF investigation report export
+    GET /analytics/dashboard Crime Pattern & Trend Analytics dashboard payload
+    GET /analytics/sociological         Sociological insights dashboard (backend/api/sociological.py)
+    GET /analytics/sociological/report  Structured sociological report
+    GET /forecast/dashboard   /forecast/hotspots   /forecast/trends
+    GET /forecast/repeat-alerts  /forecast/gang-alerts  /forecast/risk  /forecast/summary
+                             Forecasting & Early Warning Engine (backend/api/forecast.py)
 """
 
 import json
@@ -23,6 +29,7 @@ from slowapi import _rate_limit_exceeded_handler
 from backend.api.investigation_stream import stream_investigation, run_investigation_once
 from backend.api.sessions import router as sessions_router
 from backend.api.conversation import router as conversation_router
+from backend.api.conversation_chat import router as conversation_chat_router
 from backend.api.board import router as board_router
 from backend.api.voice import router as voice_router
 from backend.api.discussion import router as discussion_router
@@ -32,6 +39,10 @@ from backend.api.auth import router as auth_router
 from backend.api.admin import router as admin_router
 from backend.api.audit import router as audit_router
 from backend.api.governance import router as governance_router
+from backend.api.offender_profile import router as offender_profile_router
+from backend.api.analytics import router as analytics_router
+from backend.api.forecast import router as forecast_router
+from backend.api.sociological import router as sociological_router
 from backend.security.config import AUTH_ENABLED
 from backend.security.seed import run_all_seeds
 from backend.security.permissions import RequirePermission, VIEW_CASE, RUN_INVESTIGATION, EXPORT_PDF
@@ -96,6 +107,30 @@ app.include_router(board_router)
 app.include_router(voice_router)
 app.include_router(discussion_router)
 app.include_router(collaboration_router)
+
+# Stage F2 (Conversation Intelligence System) — new, additive. Unifies
+# chat + voice + evidence + reporting behind one /conversation/* surface;
+# does not change or replace any router above.
+app.include_router(conversation_chat_router)
+
+# Stage G1 (Criminology-Based Offender Profiling Engine) — new, additive.
+# Deterministic per-person dossier (Requirement 5): read-only, computed
+# from FIR/Accused/Arrest/ChargeSheet/Weapon/Vehicle/PersonAssociation/
+# Organization records already in the database.
+app.include_router(offender_profile_router)
+
+# Crime Pattern & Trend Analytics Agent — new, additive. Deterministic
+# (no LLM) hotspot/cluster/modus/seasonal/trend/summary engines over the
+# existing FIR/Crime/Location schema.
+app.include_router(analytics_router)
+
+# Forecasting & Early Warning Engine (Requirement 8), platform-wide,
+# deterministic (no LLM) — new, additive.
+app.include_router(forecast_router)
+
+# Sociological Crime Insights dashboard, platform-wide (not session-scoped)
+# — new, additive.
+app.include_router(sociological_router)
 
 # Stage D (Language Intelligence) — new, additive
 app.include_router(language_router)

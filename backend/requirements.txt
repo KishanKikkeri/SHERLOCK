@@ -3,6 +3,7 @@ faker>=20.0
 psycopg2-binary>=2.9   # only needed when DATABASE_URL points at Postgres
 neo4j>=5.0
 networkx>=3.0          # default GRAPH_BACKEND — required even without Neo4j
+scipy>=1.11            # Stage G1: required by networkx.pagerank() for offender network_profile centrality
 langgraph>=0.2
 langchain-anthropic>=0.2
 anthropic>=0.40

@@ -1,39 +1,33 @@
 """
-SHERLOCK — Sociological Intelligence Agent (Sprint B4, Stage B Division 12).
+SHERLOCK — Sociological Intelligence Agent (Sprint B4 -> Agent 2 upgrade).
 
-Schema gap, stated up front rather than worked around: the brief names
-six dimensions — gender, age, occupation, education, migration,
-urbanization. `Person` only has three of these (gender, age, occupation).
-There is no education field, no migration/origin field, and no
-urban/rural classification anywhere in the AER schema built in Stage A.
-Rather than fake those three with a placeholder or silently drop them
-from the output, this agent explicitly reports them as "not available in
-current schema" in its metadata, so a report consumer sees the gap
-instead of an unexplained absence. Adding them would be a real (small)
-schema change — flagged as follow-up work, not done here without a
-concrete reason to add fields three other agents also wouldn't use yet.
+Sprint B4 baseline: a single demographic tabulation (gender/age/occupation)
+of accused persons in scope, with education/migration/urbanization named
+as schema gaps rather than faked.
 
-What IS produced: a real demographic breakdown of the accused persons in
-scope (gender split, age-bracket distribution, top occupations) —
-described in the brief as a "Risk map." This agent produces the
-underlying breakdown data; it does not draw an actual choropleth/map
-(that's a frontend rendering concern, out of scope per every prior
-sprint's "no frontend changes" boundary — the data shape here is exactly
-what a district-level risk map would need to render from).
+Agent 2 upgrade adds, on top of that same honesty baseline: victim
+demographics, occupation-crime (socio-economic) correlation, and social
+risk factors (repeat-offender communities, family crime links, gang
+indicators via recorded Organization membership, and a community-
+vulnerability crime-density proxy). All of the actual computation lives
+in backend/intelligence/sociological_insights.py — this file only turns
+that computation into AgentFinding objects for the investigation
+pipeline. Urbanization, migration, economic-stress, and education stay
+schema gaps (still no such fields anywhere in the AER schema) but each
+now has a real extension-point method on the service, documented there.
+
+What IS produced: real demographic + social-risk-factor breakdowns of
+the accused (and, where relevant, victim) persons in scope — described
+in the brief as a "Risk map." This agent produces the underlying
+breakdown data; it does not draw an actual choropleth/map (a frontend
+rendering concern — see frontend/src/sociological/ for the dashboard
+that renders this data instead).
 """
-
-from collections import Counter
 
 from backend.agents.base.agent import BaseAgent
 from backend.agents.base.finding import AgentFinding
-from backend.database.models import Accused, Person
-
-AGE_BRACKETS = [(0, 18, "under 18"), (18, 25, "18-24"), (25, 35, "25-34"), (35, 50, "35-49"), (50, 200, "50+")]
-
-SCHEMA_GAP_NOTE = (
-    "education, migration, and urbanization are named in the Stage B brief but have no "
-    "corresponding field in the current AER schema — reported as unavailable, not estimated."
-)
+from backend.database.models import Accused
+from backend.intelligence.sociological_insights import SociologicalInsightsService
 
 
 class SociologicalIntelligenceAgent(BaseAgent):
@@ -41,30 +35,23 @@ class SociologicalIntelligenceAgent(BaseAgent):
 
     def __init__(self, session):
         self.session = session
+        self.service = SociologicalInsightsService(session)
 
     def run(self, state: dict):
         gctx = state.get("graph_context", {})
         accused_person_ids = gctx.get("accused_person_ids")
 
-        query = self.session.query(Person)
-        if accused_person_ids:
-            query = query.filter(Person.id.in_(accused_person_ids))
-        else:
-            # No specific scope — profile everyone currently on record as
-            # an accused, not the whole persons table (victims/witnesses
-            # aren't what a risk-map query is asking about).
-            accused_ids = {a.person_id for a in self.session.query(Accused).all()}
-            if not accused_ids:
-                return [AgentFinding(
-                    agent_name=self.name,
-                    finding_type="sociological_profile",
-                    summary="No accused persons on record to build a demographic profile from.",
-                    confidence=0.5,
-                )]
-            query = query.filter(Person.id.in_(accused_ids))
+        if not accused_person_ids and self.session.query(Accused.id).first() is None:
+            return [AgentFinding(
+                agent_name=self.name,
+                finding_type="sociological_profile",
+                summary="No accused persons on record to build a demographic profile from.",
+                confidence=0.5,
+            )]
 
-        persons = query.all()
-        if not persons:
+        dashboard = self.service.build_dashboard(accused_person_ids)
+        accused_demo = dashboard["demographics"]["accused"]
+        if accused_demo["sample_size"] == 0:
             return [AgentFinding(
                 agent_name=self.name,
                 finding_type="sociological_profile",
@@ -72,44 +59,114 @@ class SociologicalIntelligenceAgent(BaseAgent):
                 confidence=0.5,
             )]
 
-        gender_counts = Counter(p.gender.value for p in persons)
-        occupation_counts = Counter(p.occupation or "unspecified" for p in persons)
-        bracket_counts = Counter(self._bracket(p.age) for p in persons)
+        scope_ids = accused_person_ids or sorted(self._all_accused_ids())
 
-        top_occupation, top_occ_count = occupation_counts.most_common(1)[0]
-        dominant_bracket, bracket_count = bracket_counts.most_common(1)[0]
+        findings = [
+            self._demographic_finding(scope_ids, dashboard),
+            self._risk_factor_finding(scope_ids, dashboard),
+        ]
+        socio_finding = self._socioeconomic_finding(scope_ids, dashboard)
+        if socio_finding:
+            findings.append(socio_finding)
+        return findings
+
+    # -- findings ---------------------------------------------------------
+
+    def _demographic_finding(self, scope_ids, dashboard):
+        demo = dashboard["demographics"]["accused"]
+        gender = demo["gender_distribution"]
+        brackets = demo["age_bracket_distribution"]
+        occupations = demo["occupation_distribution"]
+        top_occupation = max(occupations, key=occupations.get) if occupations else "unspecified"
+        dominant_bracket = max(brackets, key=brackets.get) if brackets else "unknown"
+
+        gaps = sorted(k for k, v in dashboard["data_availability"].items() if "unavailable" in v)
+        victim_n = dashboard["demographics"]["victims"]["sample_size"]
 
         summary = (
-            f"Demographic profile of {len(persons)} accused person(s) in scope: "
-            f"{dict(gender_counts)}, most common age bracket {dominant_bracket} "
-            f"({bracket_count}/{len(persons)}), most common occupation '{top_occupation}' "
-            f"({top_occ_count}/{len(persons)}). {SCHEMA_GAP_NOTE}"
+            f"Demographic profile of {demo['sample_size']} accused person(s) in scope "
+            f"(plus {victim_n} linked victim(s)): {gender}, most common age bracket "
+            f"{dominant_bracket} ({brackets.get(dominant_bracket, 0)}/{demo['sample_size']}), "
+            f"most common occupation '{top_occupation}' ({occupations.get(top_occupation, 0)}/"
+            f"{demo['sample_size']}). Unavailable in current schema: {', '.join(gaps)}."
         )
 
-        return [AgentFinding(
+        return AgentFinding(
             agent_name=self.name,
             finding_type="sociological_profile",
             summary=summary,
             evidence=[
-                f"Gender distribution: {dict(gender_counts)}",
-                f"Age brackets: {dict(bracket_counts)}",
-                f"Top occupations: {occupation_counts.most_common(3)}",
+                f"Gender distribution: {gender}",
+                f"Age brackets: {brackets}",
+                f"Top occupations: {occupations}",
             ],
             confidence=0.9,  # direct tabulation of recorded fields, not an inference
-            source_entities=[f"person_{p.id}" for p in persons],
+            source_entities=[f"person_{pid}" for pid in scope_ids],
             metadata={
-                "sample_size": len(persons),
-                "gender_distribution": dict(gender_counts),
-                "age_bracket_distribution": dict(bracket_counts),
-                "occupation_distribution": dict(occupation_counts),
-                "unavailable_dimensions": ["education", "migration", "urbanization"],
-                "schema_gap_note": SCHEMA_GAP_NOTE,
+                "sample_size": demo["sample_size"],
+                "gender_distribution": gender,
+                "age_bracket_distribution": brackets,
+                "occupation_distribution": occupations,
+                "victim_sample_size": victim_n,
+                "victim_demographics": dashboard["demographics"]["victims"],
+                "unavailable_dimensions": gaps,
             },
-        )]
+        )
 
-    @staticmethod
-    def _bracket(age: int) -> str:
-        for lo, hi, label in AGE_BRACKETS:
-            if lo <= age < hi:
-                return label
-        return "unknown"
+    def _risk_factor_finding(self, scope_ids, dashboard):
+        risk = dashboard["social_risk_factors"]
+        ro = risk["repeat_offender_communities"]
+        fam = risk["family_crime_links"]
+        gang = risk["gang_indicators"]
+        vuln = risk["community_vulnerability"]["by_district_crime_density"]
+        top_district = vuln[0]["district"] if vuln else "unknown"
+
+        summary = (
+            f"{ro['count']} repeat offender(s), {fam['count']} family-linked accused pair(s), "
+            f"and {gang['count']} gang-affiliated accused person(s) identified in scope. "
+            f"Highest recorded crime concentration: {top_district}."
+        )
+
+        source_entities = {f"person_{pid}" for pid in ro["person_ids"]}
+        source_entities.update(f"person_{pid}" for pid in gang["person_ids"])
+        for link in fam["links"]:
+            source_entities.add(f"person_{link['person_a']}")
+            source_entities.add(f"person_{link['person_b']}")
+
+        return AgentFinding(
+            agent_name=self.name,
+            finding_type="social_risk_factors",
+            summary=summary,
+            evidence=[
+                ro["method"], fam["method"], gang["method"], risk["community_vulnerability"]["method"],
+            ],
+            confidence=0.85,
+            source_entities=sorted(source_entities),
+            metadata=risk,
+        )
+
+    def _socioeconomic_finding(self, scope_ids, dashboard):
+        socio = dashboard["socioeconomic_analysis"]
+        occ_crime = socio["occupation_crime_correlation"]
+        if not occ_crime:
+            return None
+
+        summary = (
+            f"Occupation-crime correlation computed across {len(occ_crime)} occupation "
+            f"categor{'y' if len(occ_crime) == 1 else 'ies'} (the only socio-economic attribute "
+            f"the current schema records). Income group, employment status, housing type, and "
+            f"economic category are not available — see metadata for extension points."
+        )
+
+        return AgentFinding(
+            agent_name=self.name,
+            finding_type="socioeconomic_correlation",
+            summary=summary,
+            evidence=[f"{occ}: {counts}" for occ, counts in list(occ_crime.items())[:5]],
+            confidence=0.8,
+            source_entities=[f"person_{pid}" for pid in scope_ids],
+            metadata=socio,
+        )
+
+    def _all_accused_ids(self):
+        return {row[0] for row in self.session.query(Accused.person_id).distinct().all()}

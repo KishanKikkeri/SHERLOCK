@@ -59,7 +59,9 @@ REASONING_BY_FINDING_TYPE = {
     "assignment_recommendation": "Transparent point-scoring: specialization match, district match, active caseload tiebreaker.",
     "validation_summary": "Rule-based acceptance check applied to every finding in this investigation.",
     "behavioral_profile": "Composite score from crime escalation, crime-type severity weighting, and association-graph density.",
-    "sociological_profile": "Demographic breakdown (gender/age-bracket/occupation) of the accused persons in scope.",
+    "sociological_profile": "Demographic breakdown (gender/age-bracket/occupation) of the accused (and linked victim) persons in scope.",
+    "social_risk_factors": "Repeat-offender counts from Accused-table FIR tallies, family links from PersonAssociation(relation_type=family), gang indicators from recorded OrganizationMembership(org_type=gang), community vulnerability as a crime-density-by-district proxy.",
+    "socioeconomic_correlation": "Cross-tabulation of accused-person occupation (the only socio-economic attribute in the schema) against the crime type of the FIR they're linked to.",
     "predictive_forecast": "District/crime-type/officer-workload projection from historical case-graph clustering.",
     "decision_support": "Synthesized directly from this investigation's own findings — no new querying beyond what's already been established.",
 }

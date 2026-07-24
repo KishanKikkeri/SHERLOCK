@@ -38,6 +38,7 @@ from backend.api.investigation_stream import run_investigation_once
 from backend.database.service import DatabaseService
 from backend.graph.service import get_graph_service
 from backend.intelligence.board_intelligence import BoardIntelligenceService
+from backend.intelligence.executive_summary import build_executive_report
 from backend.memory.conversation_memory import ConversationMemoryService
 
 # Compact narrative for TTS — the Chief's full narrative can run long;
@@ -266,7 +267,14 @@ class VoiceCommandRouter:
     async def _investigate(self, session_id: int | None, text: str) -> VoiceCommandResult:
         report = await run_investigation_once(text, session_id=session_id)
         narrative = report.get("narrative") or "I didn't find anything on that."
+        executive_report = build_executive_report(report)
         return VoiceCommandResult(
             "investigate", _truncate(narrative),
-            data={"final_report": report}, session_id=session_id,
+            # `final_report` is kept verbatim (all validated + rejected
+            # findings, full narrative) for a "Show Agent Trace" view.
+            # `executive_report` is the structured, ranked, counted
+            # summary the Analytics cards render by default — see
+            # backend/intelligence/executive_summary.py.
+            data={"final_report": report, "executive_report": executive_report},
+            session_id=session_id,
         )
