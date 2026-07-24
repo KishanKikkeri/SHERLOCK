@@ -19,6 +19,7 @@ import { useBoardIntelligence, useDecisionTimeline } from '@/lib/queries/board'
 import { useSession } from '@/lib/queries/sessions'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Button } from '@/components/ui/Button'
+import { useLanguage } from '@/providers/LanguageProvider'
 
 const ALL_KINDS: BoardCardKind[] = ['evidence', 'note', 'hypothesis', 'timeline']
 const GRID = 20
@@ -30,6 +31,7 @@ interface ViewTransform {
 }
 
 export function InvestigationBoardPage() {
+  const { t } = useLanguage()
   const { id } = useParams<{ id: string }>()
   const sessionId = id ? Number(id) : undefined
   const navigate = useNavigate()
@@ -294,11 +296,11 @@ export function InvestigationBoardPage() {
       {!presenting && (
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-text">Investigation board</h1>
+            <h1 className="text-2xl font-semibold text-text">{t('board_page.title', 'Investigation board')}</h1>
             <p className="text-xs text-muted">{session?.title ?? `Session #${sessionId}`}</p>
           </div>
           <Button variant="ghost" size="sm" onClick={() => navigate(`/investigations/${sessionId}`)}>
-            <ArrowLeft className="h-3.5 w-3.5" /> Back to session
+            <ArrowLeft className="h-3.5 w-3.5" /> {t('board_page.back_to_session', 'Back to session')}
           </Button>
         </div>
       )}
@@ -350,14 +352,14 @@ export function InvestigationBoardPage() {
       {presenting && (
         <div className="flex items-center justify-between rounded-lg border border-border bg-surface p-2.5">
           <span className="font-mono text-xs text-muted">
-            Presentation · {presentIdx + 1} / {pinnedCards.length}
+            {t('board_page.presentation', 'Presentation')} · {presentIdx + 1} / {pinnedCards.length}
           </span>
           <div className="flex items-center gap-1.5">
             <Button variant="ghost" size="sm" onClick={prevPresent} disabled={presentIdx === 0}>
-              ‹ Prev
+              ‹ {t('board_page.prev', 'Prev')}
             </Button>
             <Button variant="ghost" size="sm" onClick={nextPresent} disabled={presentIdx === pinnedCards.length - 1}>
-              Next ›
+              {t('board_page.next', 'Next')} ›
             </Button>
             <Button
               variant="secondary"
@@ -367,7 +369,7 @@ export function InvestigationBoardPage() {
                 resetView()
               }}
             >
-              Exit presentation
+              {t('board_page.exit_presentation', 'Exit presentation')}
             </Button>
           </div>
         </div>
@@ -426,14 +428,16 @@ export function InvestigationBoardPage() {
 
           {data.cards.length === 0 && (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-center">
-              <p className="text-sm text-text">Empty board.</p>
-              <p className="text-xs text-muted">Add a sticky note, or pull a suggestion in from the right.</p>
+              <p className="text-sm text-text">{t('board_page.empty_board', 'Empty board.')}</p>
+              <p className="text-xs text-muted">{t('board_page.empty_board_hint', 'Add a sticky note, or pull a suggestion in from the right.')}</p>
             </div>
           )}
 
           {linkMode && (
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-text shadow-lg">
-              {linkFrom ? 'Click a second card to link it — or click empty canvas to cancel' : 'Link mode: click a card to start a connection'}
+              {linkFrom
+                ? t('board_page.link_mode_pick_second', 'Click a second card to link it — or click empty canvas to cancel')
+                : t('board_page.link_mode_pick_first', 'Link mode: click a card to start a connection')}
             </div>
           )}
 

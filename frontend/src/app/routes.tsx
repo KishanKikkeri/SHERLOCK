@@ -25,8 +25,23 @@ const InvestigationBoardPage = lazy(() =>
 )
 const FindingsPage = lazy(() => import('@/findings/FindingsPage').then((m) => ({ default: m.FindingsPage })))
 const GraphPage = lazy(() => import('@/graph/GraphPage').then((m) => ({ default: m.GraphPage })))
+const ConversationPage = lazy(() =>
+  import('@/conversation/ConversationPage').then((m) => ({ default: m.ConversationPage })),
+)
 const VoicePage = lazy(() => import('@/voice/VoicePage').then((m) => ({ default: m.VoicePage })))
+const HighRiskPersonsPage = lazy(() =>
+  import('@/offender/HighRiskPersonsPage').then((m) => ({ default: m.HighRiskPersonsPage })),
+)
+const OffenderProfilePage = lazy(() =>
+  import('@/offender/OffenderProfilePage').then((m) => ({ default: m.OffenderProfilePage })),
+)
 const AnalyticsPage = lazy(() => import('@/analytics/AnalyticsPage').then((m) => ({ default: m.AnalyticsPage })))
+const SociologicalInsightsPage = lazy(() =>
+  import('@/sociological/SociologicalInsightsPage').then((m) => ({ default: m.SociologicalInsightsPage })),
+)
+const ForecastDashboardPage = lazy(() =>
+  import('@/forecasting/ForecastDashboardPage').then((m) => ({ default: m.ForecastDashboardPage })),
+)
 const UsersPage = lazy(() => import('@/admin/UsersPage').then((m) => ({ default: m.UsersPage })))
 const AuditLogPage = lazy(() => import('@/admin/AuditLogPage').then((m) => ({ default: m.AuditLogPage })))
 const GovernancePage = lazy(() => import('@/admin/GovernancePage').then((m) => ({ default: m.GovernancePage })))
@@ -47,17 +62,22 @@ export function AppRoutes() {
 
       <Route element={<RequirePermission />}>
         <Route element={<AppShell />}>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<Navigate to="/conversation" replace />} />
 
           <Route element={<RequirePermission permission="view_case" />}>
             <Route path="/dashboard" element={<RouteErrorBoundary><DashboardPage /></RouteErrorBoundary>} />
+            <Route path="/conversation" element={<Lazy><ConversationPage /></Lazy>} />
             <Route path="/investigations" element={<Lazy><InvestigationsListPage /></Lazy>} />
             <Route path="/investigations/:id" element={<Lazy><InvestigationDetailPage /></Lazy>} />
             <Route path="/investigations/:id/board" element={<Lazy><InvestigationBoardPage /></Lazy>} />
             <Route path="/investigations/:id/findings" element={<Lazy><FindingsPage /></Lazy>} />
             <Route path="/graph" element={<Lazy><GraphPage /></Lazy>} />
             <Route path="/graph/:personId" element={<Lazy><GraphPage /></Lazy>} />
+            <Route path="/offender" element={<Lazy><HighRiskPersonsPage /></Lazy>} />
+            <Route path="/offender/:personId" element={<Lazy><OffenderProfilePage /></Lazy>} />
             <Route path="/analytics" element={<Lazy><AnalyticsPage /></Lazy>} />
+            <Route path="/analytics/sociological" element={<Lazy><SociologicalInsightsPage /></Lazy>} />
+            <Route path="/forecast" element={<Lazy><ForecastDashboardPage /></Lazy>} />
           </Route>
 
           <Route element={<RequirePermission permission="use_voice" />}>

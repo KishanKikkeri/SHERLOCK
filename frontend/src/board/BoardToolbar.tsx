@@ -17,14 +17,8 @@ import {
 } from 'lucide-react'
 import type { BoardCardKind, BoardSnapshot } from './board-types'
 import { Button } from '@/components/ui/Button'
+import { useLanguage } from '@/providers/LanguageProvider'
 import { cn } from '@/lib/cn'
-
-const KIND_LABELS: Record<BoardCardKind, string> = {
-  evidence: 'Evidence',
-  note: 'Notes',
-  hypothesis: 'Hypotheses',
-  timeline: 'Timeline',
-}
 
 interface Props {
   linkMode: boolean
@@ -88,47 +82,55 @@ export function BoardToolbar({
   onUngroup,
 }: Props) {
   const [showSnapshots, setShowSnapshots] = useState(false)
+  const { t } = useLanguage()
+
+  const KIND_LABELS: Record<BoardCardKind, string> = {
+    evidence: t('board_toolbar.kind_evidence', 'Evidence'),
+    note: t('board_toolbar.kind_note', 'Notes'),
+    hypothesis: t('board_toolbar.kind_hypothesis', 'Hypotheses'),
+    timeline: t('board_toolbar.kind_timeline', 'Timeline'),
+  }
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-2.5">
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="ghost" size="sm" onClick={onExit}>
-          <ArrowLeft className="h-3.5 w-3.5" /> Investigation
+          <ArrowLeft className="h-3.5 w-3.5" /> {t('board_toolbar.back_to_investigation', 'Investigation')}
         </Button>
         <span className="h-5 w-px bg-border" />
 
         <Button variant="secondary" size="sm" onClick={onAddSticky}>
-          + Sticky
+          {t('board_toolbar.add_sticky', '+ Sticky')}
         </Button>
         <Button variant="secondary" size="sm" onClick={onAddHypothesis}>
-          + Hypothesis
+          {t('board_toolbar.add_hypothesis', '+ Hypothesis')}
         </Button>
         <Button variant="secondary" size="sm" onClick={onAddTimelineEvent}>
-          + Timeline event
+          {t('board_toolbar.add_timeline_event', '+ Timeline event')}
         </Button>
         <Button variant={linkMode ? 'primary' : 'secondary'} size="sm" onClick={onToggleLinkMode}>
-          {linkMode ? 'Linking…' : 'Link cards'}
+          {linkMode ? t('board_toolbar.linking', 'Linking…') : t('board_toolbar.link_cards', 'Link cards')}
         </Button>
 
         <span className="h-5 w-px bg-border" />
 
-        <Button variant="ghost" size="icon" onClick={onUndo} disabled={!canUndo} title="Undo">
+        <Button variant="ghost" size="icon" onClick={onUndo} disabled={!canUndo} title={t('board_toolbar.undo', 'Undo')}>
           <Undo2 className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" onClick={onRedo} disabled={!canRedo} title="Redo">
+        <Button variant="ghost" size="icon" onClick={onRedo} disabled={!canRedo} title={t('board_toolbar.redo', 'Redo')}>
           <Redo2 className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="sm" onClick={onAutoLayout} title="Auto-layout">
-          <LayoutGrid className="h-3.5 w-3.5" /> Auto-layout
+        <Button variant="ghost" size="sm" onClick={onAutoLayout} title={t('board_toolbar.auto_layout', 'Auto-layout')}>
+          <LayoutGrid className="h-3.5 w-3.5" /> {t('board_toolbar.auto_layout', 'Auto-layout')}
         </Button>
-        <Button variant="ghost" size="icon" onClick={onResetView} title="Reset view">
+        <Button variant="ghost" size="icon" onClick={onResetView} title={t('board_toolbar.reset_view', 'Reset view')}>
           <Maximize className="h-4 w-4" />
         </Button>
         <Button
           variant={snapToGrid ? 'primary' : 'ghost'}
           size="icon"
           onClick={onToggleSnap}
-          title="Snap to grid"
+          title={t('board_toolbar.snap_to_grid', 'Snap to grid')}
           aria-pressed={snapToGrid}
         >
           <Magnet className="h-4 w-4" />
@@ -136,12 +138,12 @@ export function BoardToolbar({
 
         {selectedCount >= 2 && (
           <Button variant="secondary" size="sm" onClick={onGroup}>
-            <Group className="h-3.5 w-3.5" /> Group {selectedCount}
+            <Group className="h-3.5 w-3.5" /> {t('board_toolbar.group', 'Group')} {selectedCount}
           </Button>
         )}
         {selectedCount >= 1 && (
           <Button variant="ghost" size="sm" onClick={onUngroup}>
-            <Ungroup className="h-3.5 w-3.5" /> Ungroup
+            <Ungroup className="h-3.5 w-3.5" /> {t('board_toolbar.ungroup', 'Ungroup')}
           </Button>
         )}
 
@@ -151,15 +153,15 @@ export function BoardToolbar({
             <input
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Search cards…"
+              placeholder={t('board_toolbar.search_cards_placeholder', 'Search cards…')}
               className="h-8 w-full rounded-md border border-border bg-surface pl-8 pr-2 text-xs text-text outline-none focus-visible:outline-2 focus-visible:outline-ring"
             />
           </div>
-          {search && <span className="text-xs text-muted">{matchCount} match(es)</span>}
+          {search && <span className="text-xs text-muted">{matchCount} {t('board_toolbar.matches', 'match(es)')}</span>}
 
           <div className="relative">
             <Button variant="ghost" size="sm" onClick={() => setShowSnapshots((v) => !v)}>
-              <Camera className="h-3.5 w-3.5" /> Snapshots
+              <Camera className="h-3.5 w-3.5" /> {t('board_toolbar.snapshots', 'Snapshots')}
             </Button>
             {showSnapshots && (
               <div className="absolute right-0 top-full z-10 mt-1 w-56 rounded-md border border-border bg-surface p-1 shadow-lg">
@@ -168,9 +170,11 @@ export function BoardToolbar({
                   className="w-full cursor-pointer rounded px-2 py-1.5 text-left text-xs text-text hover:bg-surface-raised"
                   onClick={() => onSaveSnapshot(`Snapshot ${snapshots.length + 1}`)}
                 >
-                  + Save current board
+                  {t('board_toolbar.save_current_board', '+ Save current board')}
                 </button>
-                {snapshots.length === 0 && <p className="px-2 py-1.5 text-xs text-muted">No snapshots saved</p>}
+                {snapshots.length === 0 && (
+                  <p className="px-2 py-1.5 text-xs text-muted">{t('board_toolbar.no_snapshots', 'No snapshots saved')}</p>
+                )}
                 {snapshots.map((s) => (
                   <div key={s.id} className="flex items-center gap-1">
                     <button
@@ -190,7 +194,7 @@ export function BoardToolbar({
                       type="button"
                       className="cursor-pointer px-1 text-xs text-muted hover:text-critical"
                       onClick={() => onDeleteSnapshot(s.id)}
-                      title="Delete snapshot"
+                      title={t('board_toolbar.delete_snapshot', 'Delete snapshot')}
                     >
                       ✕
                     </button>
@@ -201,13 +205,13 @@ export function BoardToolbar({
           </div>
 
           <Button variant="secondary" size="sm" onClick={onPresent} disabled={!canPresent}>
-            <Play className="h-3.5 w-3.5" /> Present
+            <Play className="h-3.5 w-3.5" /> {t('board_toolbar.present', 'Present')}
           </Button>
         </div>
       </div>
 
       <div className="flex items-center gap-1.5 border-t border-border pt-2">
-        <span className="text-xs text-muted">Show:</span>
+        <span className="text-xs text-muted">{t('board_toolbar.show_label', 'Show:')}</span>
         {(Object.keys(KIND_LABELS) as BoardCardKind[]).map((kind) => (
           <button
             key={kind}

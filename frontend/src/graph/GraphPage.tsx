@@ -11,12 +11,14 @@ import { ALL_NODE_TYPES } from './entity-meta'
 import { shortestPath, edgesOnPath } from './shortest-path'
 import { Card, CardBody, EmptyState } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { useLanguage } from '@/providers/LanguageProvider'
 import type { GraphNodeType, RawGraphNode } from '@/lib/types'
 
 export function GraphPage() {
   const { personId } = useParams<{ personId: string }>()
   const navigate = useNavigate()
   const centerId = personId ? Number(personId) : undefined
+  const { t } = useLanguage()
 
   const [hops, setHops] = useState(2)
   const [clustering, setClustering] = useState(false)
@@ -68,15 +70,19 @@ export function GraphPage() {
     return (
       <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-text">Network graph</h1>
-          <p className="text-sm text-muted">Explore relationships around a person.</p>
+          <h1 className="text-2xl font-semibold text-text">{t('graph_page.title', 'Network graph')}</h1>
+          <p className="text-sm text-muted">{t('graph_page.subtitle', 'Explore relationships around a person.')}</p>
         </div>
         <Card>
           <CardBody>
             <EmptyState
               icon={<Network className="h-6 w-6" />}
-              title="No graph loaded"
-              description="Every graph is centered on a person. Enter a person ID below to open one — there's no name search yet (see known limitations)."
+              title={t('graph_page.no_graph_title', 'No graph loaded')}
+              description={t(
+                'graph_page.no_graph_description',
+                "Every graph is centered on a person. Enter a person ID below to open one — "
+                + "there's no name search yet (see known limitations).",
+              )}
             />
             <div className="mx-auto mt-4 max-w-xs">
               <GraphSearch nodes={[]} onSelectNode={() => {}} onCenterOnPerson={centerOnPerson} />
@@ -91,8 +97,8 @@ export function GraphPage() {
     <div className="flex h-[calc(100vh-56px-48px)] flex-col gap-3">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-text">Network graph</h1>
-          <p className="font-mono text-xs text-muted">Centered on Person:{centerId}</p>
+          <h1 className="text-2xl font-semibold text-text">{t('graph_page.title', 'Network graph')}</h1>
+          <p className="font-mono text-xs text-muted">{t('graph_page.centered_on', 'Centered on Person:')}{centerId}</p>
         </div>
       </div>
 

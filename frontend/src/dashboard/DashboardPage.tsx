@@ -7,6 +7,7 @@ import { AssignedCases } from './AssignedCases'
 import { NotificationsPanel } from './NotificationsPanel'
 import { ActivityFeed } from './ActivityFeed'
 import { RecentDiscussions } from './RecentDiscussions'
+import { useLanguage } from '@/providers/LanguageProvider'
 import { cn } from '@/lib/cn'
 
 /**
@@ -24,12 +25,13 @@ function KpiStrip({
   metricsLoading: boolean
   openCount: number
 }) {
+  const { t } = useLanguage()
   const tiles = [
-    { icon: FolderOpen, label: 'Open investigations', value: openCount, accent: true, span: 'lg:col-span-2' },
-    { icon: Users, label: 'Persons of interest', value: metrics?.persons },
-    { icon: FileWarning, label: 'Open FIRs', value: metrics?.firs },
-    { icon: Network, label: 'Known relationships', value: metrics?.relationships },
-    { icon: Gavel, label: 'Repeat offenders', value: metrics?.repeat_offenders },
+    { icon: FolderOpen, label: t('dashboard.kpi_open_investigations', 'Open investigations'), value: openCount, accent: true, span: 'lg:col-span-2' },
+    { icon: Users, label: t('dashboard.kpi_persons_of_interest', 'Persons of interest'), value: metrics?.persons },
+    { icon: FileWarning, label: t('dashboard.kpi_open_firs', 'Open FIRs'), value: metrics?.firs },
+    { icon: Network, label: t('dashboard.kpi_known_relationships', 'Known relationships'), value: metrics?.relationships },
+    { icon: Gavel, label: t('dashboard.kpi_repeat_offenders', 'Repeat offenders'), value: metrics?.repeat_offenders },
   ]
 
   return (
@@ -73,6 +75,7 @@ function KpiStrip({
 export function DashboardPage() {
   const { data: openSessions } = useSessions({ status: 'open' })
   const { data: metrics, isLoading: metricsLoading } = useMetrics(true)
+  const { t } = useLanguage()
 
   const openCount = openSessions?.length ?? 0
   const criticalCount = openSessions?.filter((s) => s.priority === 'critical').length ?? 0
@@ -81,16 +84,16 @@ export function DashboardPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-text">Dashboard</h1>
+          <h1 className="text-2xl font-semibold text-text">{t('dashboard.title', 'Dashboard')}</h1>
           <p className="mt-1 text-sm text-muted">
-            Operational overview across all active investigations.
+            {t('dashboard.subtitle', 'Operational overview across all active investigations.')}
           </p>
         </div>
         {criticalCount > 0 && (
           <div className="flex items-center gap-2 rounded-md border border-critical/30 bg-critical-dim px-3 py-1.5">
             <span className="h-2 w-2 animate-pulse rounded-full bg-critical" aria-hidden />
             <span className="text-sm font-medium text-critical">
-              {criticalCount} critical priority
+              {criticalCount} {t('dashboard.critical_priority', 'critical priority')}
             </span>
           </div>
         )}

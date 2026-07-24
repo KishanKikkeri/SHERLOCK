@@ -4,7 +4,6 @@ import { useVoice } from './useVoice'
 import { useAudioRecorder } from './useAudioRecorder'
 import { Waveform } from './Waveform'
 import { VUMeter } from './VUMeter'
-import { LanguageSelector } from './LanguageSelector'
 import { VoiceTurnCard } from './VoiceTurnCard'
 import { newTurnId, type VoiceConversationTurn } from './conversation-turn'
 import { useVoiceCommand, useVoiceCommandPhrases, useVoiceQuery } from '@/lib/queries/voice'
@@ -12,9 +11,10 @@ import { useSessions } from '@/lib/queries/sessions'
 import { Card, CardBody, CardHeader, EmptyState } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { useLanguage } from '@/providers/LanguageProvider'
 
 export function VoicePage() {
-  const [language, setLanguage] = useState('en')
+  const { language, t } = useLanguage()
   const [useServerAudio, setUseServerAudio] = useState(false)
   const [sessionId, setSessionId] = useState<number | undefined>(undefined)
   const [turns, setTurns] = useState<VoiceConversationTurn[]>([])
@@ -38,7 +38,7 @@ export function VoicePage() {
   const handleBrowserCommand = useCallback(
     async (text: string) => {
       const id = newTurnId()
-      addTurn({ id, query: text, language: 'en', path: 'browser', timestamp: new Date().toISOString(), pending: true })
+      addTurn({ id, query: text, language, path: 'browser', timestamp: new Date().toISOString(), pending: true })
       try {
         const result = await voiceCommand.mutateAsync({ transcript: text, session_id: sessionId })
         updateTurn(id, {
@@ -54,10 +54,10 @@ export function VoicePage() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sessionId, muted, addTurn, updateTurn],
+    [sessionId, muted, language, addTurn, updateTurn],
   )
 
-  const voice = useVoice(handleBrowserCommand)
+  const voice = useVoice(handleBrowserCommand, language)
 
   const handleReplay = useCallback(
     (text: string) => {
@@ -118,7 +118,7 @@ export function VoicePage() {
     <div className="flex h-[calc(100vh-56px-48px)] flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-text">Voice</h1>
+          <h1 className="text-2xl font-semibold text-text">{t('navigation.voice', 'Voice')}</h1>
           <p className="text-xs text-muted">
             {sessionId ? `Attached to session #${sessionId}` : 'No session attached — voice commands that need one will ask'}
           </p>
@@ -208,7 +208,9 @@ export function VoicePage() {
             {voice.state.error && <p className="text-xs text-critical">Voice error: {voice.state.error}</p>}
 
             <div className="flex items-center gap-3 border-t border-border pt-4">
-              <LanguageSelector value={language} onChange={setLanguage} />
+              <Badge tone="neutral">
+                {t('voice.language_label', 'Voice language')}: {language === 'kn' ? 'ಕನ್ನಡ' : 'English'}
+              </Badge>
               <Button
                 variant={useServerAudio ? 'primary' : 'ghost'}
                 size="sm"

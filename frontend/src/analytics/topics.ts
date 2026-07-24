@@ -1,5 +1,4 @@
 import {
-  TrendingUp,
   MapPinned,
   Repeat,
   Users,
@@ -33,15 +32,12 @@ export interface AnalyticsTopic {
 }
 
 export const ANALYTICS_TOPICS: AnalyticsTopic[] = [
-  {
-    id: 'crime-trends',
-    label: 'Crime trends',
-    icon: TrendingUp,
-    findingTypes: ['crime_pattern', 'seasonal_spike'],
-    agentHint: 'Pattern Analysis agent',
-    description: 'Location-clustered crime patterns, including festival-season spikes.',
-    query: 'What crime patterns and seasonal trends are showing up across recent cases?',
-  },
+  // 'crime-trends' (crime patterns + festival-season spikes) removed from
+  // here — it's now the real TrendDashboard above, computed directly from
+  // crime records instead of a Pattern Analysis agent free-text query.
+  // 'hotspots' below is intentionally still agent-driven: it's a forward
+  // *projection* from the Forecasting agent, not the historical hotspot
+  // detection TrendDashboard now covers — different question, kept separate.
   {
     id: 'hotspots',
     label: 'Hotspots',

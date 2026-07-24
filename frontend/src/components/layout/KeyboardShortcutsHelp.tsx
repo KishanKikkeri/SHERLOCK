@@ -2,9 +2,11 @@ import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import { SHORTCUT_GROUPS } from '@/lib/use-keyboard-shortcuts'
 import { Button } from '@/components/ui/Button'
+import { useLanguage } from '@/providers/LanguageProvider'
 
 export function KeyboardShortcutsHelp({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLDialogElement>(null)
+  const { t } = useLanguage()
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -26,7 +28,7 @@ export function KeyboardShortcutsHelp({ onClose }: { onClose: () => void }) {
     // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
     <dialog
       ref={dialogRef}
-      aria-label="Keyboard shortcuts"
+      aria-label={t('keyboard_shortcuts_panel.title')}
       onClose={onClose}
       onClick={(e) => {
         if (e.target === dialogRef.current) onClose()
@@ -35,15 +37,15 @@ export function KeyboardShortcutsHelp({ onClose }: { onClose: () => void }) {
     >
       <div className="w-full max-w-sm p-4">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-text">Keyboard shortcuts</h2>
-          <Button variant="ghost" size="icon" aria-label="Close" onClick={onClose}>
+          <h2 className="text-sm font-semibold text-text">{t('keyboard_shortcuts_panel.title')}</h2>
+          <Button variant="ghost" size="icon" aria-label={t('common.close')} onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
         </div>
         <dl className="flex flex-col gap-2">
           {SHORTCUT_GROUPS.map((s) => (
             <div key={s.keys} className="flex items-center justify-between text-sm">
-              <dt className="text-muted">{s.label}</dt>
+              <dt className="text-muted">{t(s.labelKey, s.fallback)}</dt>
               <dd className="flex gap-1">
                 {s.keys.split(' ').map((k, i) => (
                   <kbd

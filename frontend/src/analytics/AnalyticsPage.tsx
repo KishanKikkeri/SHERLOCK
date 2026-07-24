@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Users, MailWarning as FileWarning, Network, Gavel, Landmark, ShieldAlert } from 'lucide-react'
 import { ANALYTICS_TOPICS } from './topics'
 import { AnalyticsTopicCard } from './AnalyticsTopicCard'
+import { TrendDashboard } from './TrendDashboard'
 import { useMetrics } from '@/lib/queries/system'
 import { useSessions } from '@/lib/queries/sessions'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -59,6 +60,8 @@ export function AnalyticsPage() {
           </select>
         </label>
       </div>
+
+      <TrendDashboard />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <KpiTile icon={Users} label="Persons of interest" value={metrics?.persons} isLoading={metricsLoading} />

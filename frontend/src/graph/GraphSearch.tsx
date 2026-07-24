@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { Search, X } from 'lucide-react'
 import type { RawGraphNode } from '@/lib/types'
-import { ENTITY_META } from './entity-meta'
+import { ENTITY_META, entityLabel } from './entity-meta'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { useLanguage } from '@/providers/LanguageProvider'
 
 export function GraphSearch({
   nodes,
@@ -16,6 +17,7 @@ export function GraphSearch({
 }) {
   const [query, setQuery] = useState('')
   const [personIdInput, setPersonIdInput] = useState('')
+  const { t } = useLanguage()
 
   const results =
     query.trim().length > 0
@@ -38,7 +40,7 @@ export function GraphSearch({
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
         <Input
-          placeholder="Search nodes in this graph…"
+          placeholder={t('graph.search_placeholder', 'Search nodes in this graph…')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="pl-9"
@@ -74,7 +76,7 @@ export function GraphSearch({
                   aria-hidden
                 />
                 <span className="truncate text-text">{n.label}</span>
-                <span className="ml-auto shrink-0 text-xs text-muted">{ENTITY_META[n.type].label}</span>
+                <span className="ml-auto shrink-0 text-xs text-muted">{entityLabel(n.type, t)}</span>
               </button>
             </li>
           ))}

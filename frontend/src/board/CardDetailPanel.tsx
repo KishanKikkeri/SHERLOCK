@@ -9,6 +9,7 @@ import { useAuth } from '@/auth/AuthProvider'
 import { hasPermission } from '@/lib/permissions'
 import { formatRelativeTime } from '@/lib/format'
 import { useToast } from '@/components/layout/ToastProvider'
+import { useLanguage } from '@/providers/LanguageProvider'
 import type { BoardObjectType } from '@/lib/types'
 
 const KIND_TO_OBJECT_TYPE: Record<BoardCard['kind'], BoardObjectType> = {
@@ -37,6 +38,7 @@ export function CardDetailPanel({
   const addComment = useAddComment(sessionId)
   const [commentBody, setCommentBody] = useState('')
   const toast = useToast()
+  const { t } = useLanguage()
 
   async function handleShare() {
     const obj = await createBoardObject.mutateAsync({
@@ -46,7 +48,7 @@ export function CardDetailPanel({
       created_by_officer_id: user?.officer_id ?? undefined,
     })
     onShared(obj.id)
-    toast.show('Card shared with team')
+    toast.show(t('notifications.card_shared', 'Card shared with team'))
   }
 
   function handleAddComment(e: FormEvent) {
@@ -62,7 +64,7 @@ export function CardDetailPanel({
       {
         onSuccess: () => {
           setCommentBody('')
-          toast.show('Comment posted')
+          toast.show(t('notifications.comment_posted', 'Comment posted'))
         },
       },
     )

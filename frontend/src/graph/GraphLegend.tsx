@@ -1,5 +1,6 @@
 import type { GraphNodeType, RawGraphNode } from '@/lib/types'
-import { ENTITY_META } from './entity-meta'
+import { ENTITY_META, entityLabel } from './entity-meta'
+import { useLanguage } from '@/providers/LanguageProvider'
 import { cn } from '@/lib/cn'
 
 export function GraphLegend({
@@ -11,11 +12,12 @@ export function GraphLegend({
   visibleTypes: Set<GraphNodeType>
   onToggleType: (type: GraphNodeType) => void
 }) {
+  const { t } = useLanguage()
   const counts = new Map<GraphNodeType, number>()
   for (const n of nodes) counts.set(n.type, (counts.get(n.type) ?? 0) + 1)
 
   const typesPresent = Array.from(counts.keys()).sort((a, b) =>
-    ENTITY_META[a].label.localeCompare(ENTITY_META[b].label),
+    entityLabel(a, t).localeCompare(entityLabel(b, t)),
   )
 
   if (typesPresent.length === 0) return null
@@ -45,7 +47,7 @@ export function GraphLegend({
               style={{ backgroundColor: `var(--${meta.colorVar})` }}
               aria-hidden
             />
-            {meta.label}
+            {entityLabel(type, t)}
             <span className="font-mono text-muted">{counts.get(type)}</span>
           </button>
         )

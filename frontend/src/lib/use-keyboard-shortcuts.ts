@@ -71,12 +71,12 @@ export function useKeyboardShortcuts() {
   return { helpOpen, setHelpOpen }
 }
 
-export const SHORTCUT_GROUPS: { keys: string; label: string }[] = [
-  { keys: 'g d', label: 'Go to Dashboard' },
-  { keys: 'g i', label: 'Go to Investigations' },
-  { keys: 'g g', label: 'Go to Network graph' },
-  { keys: 'g v', label: 'Go to Voice' },
-  { keys: 'g a', label: 'Go to Analytics' },
-  { keys: '?', label: 'Show this help' },
-  { keys: 'Esc', label: 'Close dialogs / deselect' },
+export const SHORTCUT_GROUPS: { keys: string; labelKey: string; fallback: string }[] = [
+  { keys: 'g d', labelKey: 'keyboard_shortcuts_panel.go_to_dashboard', fallback: 'Go to Dashboard' },
+  { keys: 'g i', labelKey: 'keyboard_shortcuts_panel.go_to_investigations', fallback: 'Go to Investigations' },
+  { keys: 'g g', labelKey: 'keyboard_shortcuts_panel.go_to_network_graph', fallback: 'Go to Network graph' },
+  { keys: 'g v', labelKey: 'keyboard_shortcuts_panel.go_to_voice', fallback: 'Go to Voice' },
+  { keys: 'g a', labelKey: 'keyboard_shortcuts_panel.go_to_analytics', fallback: 'Go to Analytics' },
+  { keys: '?', labelKey: 'keyboard_shortcuts_panel.show_this_help', fallback: 'Show this help' },
+  { keys: 'Esc', labelKey: 'keyboard_shortcuts_panel.close_dialogs', fallback: 'Close dialogs / deselect' },
 ]

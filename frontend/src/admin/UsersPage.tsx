@@ -11,6 +11,7 @@ import {
   useRevokeRole,
   useSetUserActive,
 } from '@/lib/queries/admin'
+import { useLanguage } from '@/providers/LanguageProvider'
 import type { Role } from '@/lib/types'
 
 const ALL_ROLES: Role[] = [
@@ -28,12 +29,13 @@ export function UsersPage() {
   const revokeRole = useRevokeRole()
   const setActive = useSetUserActive()
   const [roleDraft, setRoleDraft] = useState<Record<number, Role>>({})
+  const { t } = useLanguage()
 
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold text-text">Users</h1>
-        <p className="text-sm text-muted">Manage accounts and role assignments.</p>
+        <h1 className="text-2xl font-semibold text-text">{t('admin_pages.users_title', 'Users')}</h1>
+        <p className="text-sm text-muted">{t('admin_pages.users_subtitle', 'Manage accounts and role assignments.')}</p>
       </div>
 
       <Card>
@@ -47,8 +49,8 @@ export function UsersPage() {
           ) : !users || users.length === 0 ? (
             <EmptyState
               icon={<UsersIcon className="h-6 w-6" />}
-              title="No users found"
-              description="Accounts created via POST /admin/users will appear here."
+              title={t('admin_pages.no_users_title', 'No users found')}
+              description={t('admin_pages.no_users_description', 'Accounts created via POST /admin/users will appear here.')}
             />
           ) : (
             <Table>

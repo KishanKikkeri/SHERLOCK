@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import * as d3 from 'd3'
 import type { GraphNodeType, RawGraphEdge, RawGraphNode } from '@/lib/types'
-import { ENTITY_META, edgeLabel } from './entity-meta'
+import { ENTITY_META, edgeLabel, entityLabel } from './entity-meta'
+import { useLanguage } from '@/providers/LanguageProvider'
 import { useGraphLayout, type SimLink, type SimNode } from './useGraphLayout'
 import { computeDegreeMap, nodeRadius } from './node-radius'
 import { edgePairKey } from './shortest-path'
@@ -46,6 +47,7 @@ export function GraphView({
   onSelectNode,
   onZoomReady,
 }: GraphViewProps) {
+  const { t } = useLanguage()
   const containerRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const zoomLayerRef = useRef<SVGGElement>(null)
@@ -283,7 +285,7 @@ export function GraphView({
                     // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
                     role="button"
                     tabIndex={0}
-                    aria-label={`${meta.label}: ${n.label}`}
+                    aria-label={`${entityLabel(n.type, t)}: ${n.label}`}
                     className={cn(
                       'cursor-pointer outline-none transition-opacity duration-150',
                       dimmed ? 'opacity-15' : 'opacity-100',

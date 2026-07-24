@@ -8,10 +8,11 @@ import { memo, useState } from 'react'
 import { Pin, X, Users, MessageSquare } from 'lucide-react'
 import type { BoardCard } from './board-types'
 import { STICKY_COLORS } from './board-types'
-import { ENTITY_META } from '@/graph/entity-meta'
+import { ENTITY_META, entityLabel } from '@/graph/entity-meta'
 import { cn } from '@/lib/cn'
 import { confidenceTone } from '@/lib/status-tone'
 import { Badge } from '@/components/ui/Badge'
+import { useLanguage } from '@/providers/LanguageProvider'
 
 interface Props {
   card: BoardCard
@@ -39,7 +40,9 @@ function BoardCardViewInner({
   onSelect,
 }: Props) {
   const [editing, setEditing] = useState(false)
+  const { t } = useLanguage()
   const entityMeta = card.entityType ? ENTITY_META[card.entityType] : null
+  const kindLabel = t(`board_toolbar.kind_${card.kind}`, card.kind)
 
   const borderColor = card.kind === 'note' ? undefined : entityMeta ? `var(--${entityMeta.colorVar})` : card.color
 
@@ -71,7 +74,7 @@ function BoardCardViewInner({
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
       role="button"
       tabIndex={0}
-      aria-label={`${card.kind} card: ${card.title}`}
+      aria-label={`${kindLabel} card: ${card.title}`}
       onPointerDown={(e) => onPointerDown(card.id, e)}
       onClick={(e) => {
         if (e.shiftKey) onToggleSelect(card.id, e)
@@ -94,7 +97,7 @@ function BoardCardViewInner({
       <div className="flex items-center gap-1">
         {card.kind === 'evidence' && card.entityType && (
           <Badge tone="neutral" className="text-[10px]">
-            {ENTITY_META[card.entityType].label}
+            {entityLabel(card.entityType, t)}
           </Badge>
         )}
         {card.kind === 'hypothesis' && card.confidence !== undefined && (
@@ -108,12 +111,12 @@ function BoardCardViewInner({
           </span>
         )}
         {card.sharedObjectId !== undefined && (
-          <span title="Shared with team" className="text-muted">
+          <span title={t('board_card.shared_with_team', 'Shared with team')} className="text-muted">
             <Users className="h-3 w-3" />
           </span>
         )}
         {!!commentCount && (
-          <span className="flex items-center gap-0.5 text-[10px] text-muted" title={`${commentCount} comment(s)`}>
+          <span className="flex items-center gap-0.5 text-[10px] text-muted" title={`${commentCount} ${t('board_card.comments', 'comment(s)')}`}>
             <MessageSquare className="h-3 w-3" />
             {commentCount}
           </span>
@@ -126,7 +129,7 @@ function BoardCardViewInner({
               e.stopPropagation()
               onEdit(card.id, { pinned: !card.pinned })
             }}
-            title={card.pinned ? 'Remove from presentation' : 'Pin for presentation'}
+            title={card.pinned ? t('board_card.remove_from_presentation', 'Remove from presentation') : t('board_card.pin_for_presentation', 'Pin for presentation')}
             aria-pressed={card.pinned}
           >
             <Pin className="h-3 w-3" />
@@ -138,7 +141,7 @@ function BoardCardViewInner({
               e.stopPropagation()
               onDelete(card.id)
             }}
-            title="Delete"
+            title={t('board_card.delete', 'Delete')}
           >
             <X className="h-3 w-3" />
           </button>
@@ -177,7 +180,7 @@ function BoardCardViewInner({
                   className="h-4 w-4 cursor-pointer rounded-full border border-black/10"
                   style={{ background: c }}
                   onClick={() => onEdit(card.id, { color: c })}
-                  aria-label={`Colour ${c}`}
+                  aria-label={`${t('board_card.colour', 'Colour')} ${c}`}
                 />
               ))}
             </div>
@@ -187,7 +190,7 @@ function BoardCardViewInner({
             className="cursor-pointer self-end rounded bg-black/10 px-2 py-0.5 text-[10px] font-medium"
             onClick={() => setEditing(false)}
           >
-            Done
+            {t('board_card.done', 'Done')}
           </button>
         </div>
       ) : (

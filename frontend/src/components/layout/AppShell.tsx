@@ -4,6 +4,7 @@ import { ScanSearch, Moon, Sun, LogOut, Menu, X, Keyboard } from 'lucide-react'
 import { Nav } from './Nav'
 import { ConnectivityBanner } from './ConnectivityBanner'
 import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp'
+import { LanguageToggle } from './LanguageToggle'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { HealthStatusBadge } from '@/dashboard/HealthStatusBadge'
@@ -11,6 +12,7 @@ import { useAuth } from '@/auth/AuthProvider'
 import { useLogout } from '@/lib/queries/auth'
 import { useTheme } from '@/lib/use-theme'
 import { useKeyboardShortcuts } from '@/lib/use-keyboard-shortcuts'
+import { useLanguage } from '@/providers/LanguageProvider'
 import { cn } from '@/lib/cn'
 
 export function AppShell() {
@@ -18,6 +20,7 @@ export function AppShell() {
   const logout = useLogout()
   const { theme, toggleTheme } = useTheme()
   const { helpOpen, setHelpOpen } = useKeyboardShortcuts()
+  const { t } = useLanguage()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
@@ -26,7 +29,7 @@ export function AppShell() {
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:text-white"
       >
-        Skip to main content
+        {t('navigation.skip_to_main_content')}
       </a>
 
       <ConnectivityBanner />
@@ -37,27 +40,28 @@ export function AppShell() {
             variant="ghost"
             size="icon"
             className="lg:hidden"
-            aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
+            aria-label={sidebarOpen ? t('navigation.close_menu') : t('navigation.open_menu')}
             onClick={() => setSidebarOpen((v) => !v)}
           >
             {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </Button>
           <ScanSearch className="h-5 w-5 text-accent" aria-hidden />
-          <span className="font-semibold tracking-tight">SHERLOCK</span>
+          <span className="font-semibold tracking-tight">{t('labels.app_name')}</span>
           {authMode === 'disabled' && (
             <Badge tone="warning" title="SHERLOCK_AUTH_ENABLED is off on this backend">
-              Auth disabled — dev mode
+              {t('navigation.auth_disabled_badge')}
             </Badge>
           )}
         </div>
         <div className="flex items-center gap-3">
+          <LanguageToggle />
           <HealthStatusBadge />
           <Button
             variant="ghost"
             size="icon"
             className="hidden sm:inline-flex"
-            aria-label="Keyboard shortcuts"
-            title="Keyboard shortcuts (?)"
+            aria-label={t('navigation.keyboard_shortcuts')}
+            title={`${t('navigation.keyboard_shortcuts')} (?)`}
             onClick={() => setHelpOpen(true)}
           >
             <Keyboard className="h-4 w-4" />
@@ -65,7 +69,7 @@ export function AppShell() {
           <Button
             variant="ghost"
             size="icon"
-            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-label={theme === 'dark' ? t('navigation.switch_to_light_mode') : t('navigation.switch_to_dark_mode')}
             onClick={toggleTheme}
           >
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -78,10 +82,10 @@ export function AppShell() {
             <Button
               variant="ghost"
               size="icon"
-              aria-label="Log out"
+              aria-label={t('navigation.log_out')}
               onClick={() => logout.mutate()}
               disabled={authMode === 'disabled'}
-              title={authMode === 'disabled' ? 'Logout is a no-op with auth disabled' : 'Log out'}
+              title={authMode === 'disabled' ? 'Logout is a no-op with auth disabled' : t('navigation.log_out')}
             >
               <LogOut className="h-4 w-4" />
             </Button>

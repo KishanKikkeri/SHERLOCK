@@ -7,21 +7,23 @@ import { Input } from '@/components/ui/Input'
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table'
 import { useAuditLog } from '@/lib/queries/governance'
 import { formatRelativeTime } from '@/lib/format'
+import { useLanguage } from '@/providers/LanguageProvider'
 
 export function AuditLogPage() {
   const [action, setAction] = useState('')
   const { data, isLoading } = useAuditLog({ action: action || undefined })
+  const { t } = useLanguage()
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-text">Audit log</h1>
-          <p className="text-sm text-muted">Every recorded login, permission check, and export.</p>
+          <h1 className="text-2xl font-semibold text-text">{t('admin_pages.audit_title', 'Audit log')}</h1>
+          <p className="text-sm text-muted">{t('admin_pages.audit_subtitle', 'Every recorded login, permission check, and export.')}</p>
         </div>
         <div className="w-56">
           <Input
-            placeholder="Filter by action…"
+            placeholder={t('admin_pages.audit_filter_placeholder', 'Filter by action…')}
             value={action}
             onChange={(e) => setAction(e.target.value)}
           />

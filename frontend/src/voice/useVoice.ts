@@ -40,7 +40,7 @@ export interface VoiceActions {
   getAnalyser: () => AnalyserNode | null
 }
 
-export function useVoice(onCommand: (text: string) => void, wakeWord = DEFAULT_WAKE_WORD) {
+export function useVoice(onCommand: (text: string) => void, language: 'en' | 'kn' = 'en', wakeWord = DEFAULT_WAKE_WORD) {
   const Ctor = getRecognitionCtor()
   const [state, setState] = useState<VoiceState>({
     supported: !!Ctor,
@@ -51,6 +51,15 @@ export function useVoice(onCommand: (text: string) => void, wakeWord = DEFAULT_W
     speaking: false,
     error: null,
   })
+
+  // Live mirror of the selected UI language — recognition/synthesis
+  // callbacks are built once (or on restart) and must not close over a
+  // stale value when the global LanguageProvider's language changes
+  // mid-session (Phase 6: voice defaults follow the UI language).
+  const languageRef = useRef(language)
+  useEffect(() => {
+    languageRef.current = language
+  }, [language])
 
   const recogRef = useRef<SpeechRecognition | null>(null)
   const wantWakeRef = useRef(false) // should we auto-restart recognition on 'end'?
@@ -116,7 +125,7 @@ export function useVoice(onCommand: (text: string) => void, wakeWord = DEFAULT_W
       const r = new Ctor()
       r.continuous = mode === 'wake'
       r.interimResults = true
-      r.lang = 'en-US'
+      r.lang = languageRef.current === 'kn' ? 'kn-IN' : 'en-US'
 
       r.onresult = (e: SpeechRecognitionEvent) => {
         let interim = ''
@@ -258,6 +267,7 @@ export function useVoice(onCommand: (text: string) => void, wakeWord = DEFAULT_W
       window.speechSynthesis.cancel()
       const utter = new SpeechSynthesisUtterance(text)
       utter.rate = 1.02
+      utter.lang = languageRef.current === 'kn' ? 'kn-IN' : 'en-US'
       utter.onstart = () => setState((s) => ({ ...s, speaking: true }))
       const resumeAndFinish = () => {
         setState((s) => ({ ...s, speaking: false }))

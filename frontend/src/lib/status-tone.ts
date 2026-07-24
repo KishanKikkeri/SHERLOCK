@@ -37,3 +37,36 @@ export function confidenceTone(confidence: number): { tone: Tone; label: string 
   if (confidence >= 0.5) return { tone: 'warning', label: 'Moderate confidence' }
   return { tone: 'critical', label: 'Low confidence' }
 }
+
+export function riskBandTone(band: 'Very Low' | 'Low' | 'Moderate' | 'High' | 'Critical'): Tone {
+  switch (band) {
+    case 'Very Low':
+    case 'Low':
+      return 'positive'
+    case 'Moderate':
+      return 'warning'
+    case 'High':
+    case 'Critical':
+      return 'critical'
+    default:
+      return 'neutral'
+  }
+}
+
+export function investigationPriorityTone(
+  priority: 'Routine' | 'Important' | 'Priority' | 'Urgent' | 'Critical',
+): Tone {
+  switch (priority) {
+    case 'Routine':
+      return 'neutral'
+    case 'Important':
+      return 'info'
+    case 'Priority':
+      return 'warning'
+    case 'Urgent':
+    case 'Critical':
+      return 'critical'
+    default:
+      return 'neutral'
+  }
+}

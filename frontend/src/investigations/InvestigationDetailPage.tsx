@@ -10,6 +10,7 @@ import { formatRelativeTime } from '@/lib/format'
 import { PresenceIndicator } from '@/collaboration/PresenceIndicator'
 import { SessionActivityFeed } from '@/collaboration/SessionActivityFeed'
 import { DiscussionReplay } from '@/collaboration/DiscussionReplay'
+import { useLanguage } from '@/providers/LanguageProvider'
 
 /**
  * Investigation detail — mission-control header, not a form.
@@ -21,6 +22,7 @@ export function InvestigationDetailPage() {
   const { id } = useParams<{ id: string }>()
   const sessionId = id ? Number(id) : undefined
   const { data: session, isLoading } = useSession(sessionId)
+  const { t } = useLanguage()
 
   return (
     <div className="flex flex-col gap-4">
@@ -29,7 +31,7 @@ export function InvestigationDetailPage() {
         className="flex w-fit items-center gap-1 text-sm text-muted hover:text-text"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden />
-        Back to investigations
+        {t('investigations.back_to_investigations', 'Back to investigations')}
       </Link>
 
       {isLoading || !session || !sessionId ? (
@@ -58,15 +60,15 @@ export function InvestigationDetailPage() {
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3 text-sm">
               <div className="flex items-center gap-1.5 text-muted">
                 <Clock className="h-3.5 w-3.5" aria-hidden />
-                <span>Opened {formatRelativeTime(session.opened_at)}</span>
+                <span>{t('investigations.opened', 'Opened')} {formatRelativeTime(session.opened_at)}</span>
               </div>
               <div className="flex items-center gap-1.5 text-muted">
                 <FileText className="h-3.5 w-3.5" aria-hidden />
-                <span>FIR #{session.fir_id ?? '—'}</span>
+                <span>{t('investigations.fir_number', 'FIR #')}{session.fir_id ?? '—'}</span>
               </div>
               <div className="flex items-center gap-1.5 text-muted">
                 <UserCircle className="h-3.5 w-3.5" aria-hidden />
-                <span>Updated {formatRelativeTime(session.updated_at)}</span>
+                <span>{t('investigations.updated', 'Updated')} {formatRelativeTime(session.updated_at)}</span>
               </div>
               {session.notes && (
                 <div className="flex min-w-0 items-center gap-1.5 text-muted">
@@ -79,22 +81,22 @@ export function InvestigationDetailPage() {
             <div className="flex flex-wrap gap-2 border-t border-border px-5 py-3">
               <Link to={`/investigations/${session.id}/board`}>
                 <Button variant="secondary" size="sm">
-                  <LayoutDashboard className="h-3.5 w-3.5" /> Board
+                  <LayoutDashboard className="h-3.5 w-3.5" /> {t('investigations.board_button', 'Board')}
                 </Button>
               </Link>
               <Link to={`/investigations/${session.id}/findings`}>
                 <Button variant="secondary" size="sm">
-                  <Lightbulb className="h-3.5 w-3.5" /> Findings
+                  <Lightbulb className="h-3.5 w-3.5" /> {t('investigations.findings_button', 'Findings')}
                 </Button>
               </Link>
               <Link to="/graph">
                 <Button variant="ghost" size="sm">
-                  <Network className="h-3.5 w-3.5" /> Network graph
+                  <Network className="h-3.5 w-3.5" /> {t('investigations.network_graph_button', 'Network graph')}
                 </Button>
               </Link>
               <Link to="/voice">
                 <Button variant="ghost" size="sm">
-                  <Mic className="h-3.5 w-3.5" /> Voice
+                  <Mic className="h-3.5 w-3.5" /> {t('investigations.voice_button', 'Voice')}
                 </Button>
               </Link>
             </div>
@@ -111,12 +113,15 @@ export function InvestigationDetailPage() {
             <CardBody className="flex flex-col items-center gap-2 py-8 text-center">
               <Construction className="h-6 w-6 text-muted" aria-hidden />
               <p className="text-sm font-medium text-text">
-                The live conversation panel isn't built yet
+                {t('investigations.conversation_panel_missing_title', "The live conversation panel isn't built yet")}
               </p>
               <p className="max-w-md text-xs text-muted">
-                Board, graph, voice, findings, and this session's activity and discussion
-                history are all real and linked above. The one piece still missing is a live
-                WS-connected conversation panel — voice already covers most of what that would do.
+                {t(
+                  'investigations.conversation_panel_missing_description',
+                  "Board, graph, voice, findings, and this session's activity and discussion "
+                  + "history are all real and linked above. The one piece still missing is a live "
+                  + "WS-connected conversation panel — voice already covers most of what that would do.",
+                )}
               </p>
             </CardBody>
           </Card>

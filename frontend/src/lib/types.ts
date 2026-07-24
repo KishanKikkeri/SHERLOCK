@@ -359,3 +359,414 @@ export interface ApiError {
   status: number
   detail: string
 }
+
+// ---------------------------------------------------------------------------
+// Stage F2 — Conversation Intelligence System
+// Mirrors backend/api/conversation_chat.py + backend/conversation/*.py.
+// ---------------------------------------------------------------------------
+
+export type ConversationIntent = 'investigate' | 'summarize' | 'export_pdf' | 'clear_history'
+
+export interface ConversationCitationEntity {
+  kind: 'person' | 'fir' | 'account' | 'organization' | 'property' | 'weapon'
+  id: number
+  label: string
+}
+
+export interface ConversationCitation {
+  finding_type: string
+  agent_name: string
+  summary: string
+  confidence: number
+  validated: boolean
+  evidence: string[]
+  reasoning: string
+  related_documents: string[]
+  entities: ConversationCitationEntity[]
+}
+
+export interface ConversationMessageResult {
+  session_id: number
+  intent: ConversationIntent
+  message: string
+  reply: string
+  final_report: Record<string, unknown> | null
+  citations: ConversationCitation[]
+  suggested_questions: string[]
+  pdf_available?: boolean
+  pdf_warnings?: string[]
+}
+
+export interface ConversationHistoryMessage {
+  role: 'user' | 'assistant'
+  turn_index: number
+  text: string
+  created_at: string
+  type?: 'answer' | 'clarification'
+  options?: { id: number; kind: string; label: string }[]
+  archived?: boolean
+}
+
+export interface ConversationStreamEvent {
+  timestamp: string
+  event_type: string
+  agent: string | null
+  message: string | null
+  data: Record<string, unknown> | null
+}
+
+export interface ConversationSummaryResult {
+  session_id: number
+  summary: string | null
+  summary_through_turn: number | null
+  turn_count: number
+}
+
+/** Matches backend/intelligence/executive_summary.py::build_executive_report.
+ * Attached as `data.executive_report` on voice `investigate`-intent results
+ * (backend/voice/command_router.py) — this is what Analytics cards render
+ * by default. The raw `final_report` (all validated + rejected findings,
+ * full narrative) is still present alongside it in `data.final_report`
+ * for a "Show Agent Trace" view. */
+export interface ExecutiveReport {
+  title: string
+  summary: string
+  confidence: number
+  risk_level: 'Unknown' | 'Low' | 'Medium' | 'High'
+  key_findings: string[]
+  supporting_evidence: string[]
+  recommendations: string[]
+  metrics: Record<string, number>
+  entities: { type: string; id: string }[]
+  timeline: { label: string; agent: string }[]
+  sources: string[]
+}
+
+// ---------------------------------------------------------------------------
+// Stage G1 — Criminology-Based Offender Profiling Engine
+// Mirrors backend/api/offender_profile.py + backend/intelligence/*.py.
+// ---------------------------------------------------------------------------
+
+export interface OffenderIdentity {
+  person_id: number
+  name: string
+  gender: string
+  age: number
+  occupation: string | null
+  home_location: { district: string; state: string } | null
+}
+
+export interface OffenderCriminalHistory {
+  fir_count: number
+  arrest_count: number
+  chargesheet_count: number
+  chargesheets_filed: number
+  conviction_count: number
+  pending_investigation_count: number
+  crime_categories: Record<string, number>
+  first_offence_date: string | null
+  latest_offence_date: string | null
+  days_since_last_offence: number | null
+  crime_frequency_per_year: number | null
+  repeat_offender: boolean
+  habitual_offender: boolean
+  custody_status: string | null
+  on_bail_no_chargesheet: boolean
+}
+
+export interface OffenderBehaviorProfile {
+  escalation: { ladder: string[]; score: number; trend: string; because: string }
+  aggression: {
+    score: number
+    violent_offence_count: number
+    weapon_incidents: number
+    weapons_recovered_from_person: number
+    weapon_types: string[]
+    because: string
+  }
+  planning: {
+    score: number
+    alias_count: number
+    vehicle_count: number
+    bank_account_count: number
+    coordinated_fir_count: number
+    indicators: string[]
+    because: string
+  }
+  mobility: {
+    districts_operated: string[]
+    states_operated: string[]
+    average_travel_radius_km: number | null
+    because: string
+  }
+  target_selection: {
+    victim_count: number
+    victim_gender_distribution: Record<string, number>
+    note: string
+    because: string
+  }
+  time_profile: {
+    most_common_weekday: string | null
+    most_common_month: string | null
+    most_common_hour: number | null
+    because: string
+  }
+}
+
+export interface OffenderModusOperandi {
+  weapon_usage: string[]
+  vehicle_usage: string[]
+  financial_method: string | null
+  crime_sequence: string[]
+  location_preference: { most_common_district: string; occurrences: number; district_spread: Record<string, number> } | null
+  mo_keyword_buckets: Record<string, string[]>
+  mo_repeat_keywords: string[]
+  mo_clustering_method: string
+  because: string
+}
+
+export interface OffenderRiskProfile {
+  overall_score: number
+  band: 'Very Low' | 'Low' | 'Medium' | 'High' | 'Critical'
+  components: Record<string, number>
+  weights: Record<string, number>
+  because: string[]
+}
+
+export interface OffenderInvestigationPriority {
+  priority: 'Routine' | 'Monitor' | 'Priority' | 'Urgent' | 'Critical'
+  ladder_index: number
+  ladder: string[]
+  because: string[]
+}
+
+export interface OffenderNetworkProfile {
+  associate_count: number
+  associates: { associate_id: number; name: string; edge_type: string; relation_type: string | null; strength: number | null }[]
+  repeat_collaborators: { associate_id: number; name: string }[]
+  organizations: { organization_id: number; name: string | null; role: string | null }[]
+  financial_links: { person_id: number; name: string | null; transaction_count: number; suspicious_transaction_count: number; total_amount: number }[]
+  shared_address_with: { person_id: number; name: string }[]
+  graph_metrics:
+    | { available: false; reason: string }
+    | { available: true; pagerank: number; degree_centrality: number; community_size: number; influence_score: number; because: string }
+  because: string
+}
+
+export interface OffenderRecommendation {
+  action: string
+  because: string
+}
+
+export interface OffenderProfile {
+  identity: OffenderIdentity
+  aliases: string[]
+  criminal_history: OffenderCriminalHistory
+  behavior_profile: OffenderBehaviorProfile
+  modus_operandi: OffenderModusOperandi
+  risk_profile: OffenderRiskProfile
+  investigation_priority: OffenderInvestigationPriority
+  network_profile: OffenderNetworkProfile
+  recommendations: OffenderRecommendation[]
+}
+
+export interface OffenderProfileSummary {
+  person_id: number
+  name: string
+  risk_score: number
+  risk_band: string
+  priority: string
+  fir_count: number
+  crime_categories: string[]
+  districts_operated: string[]
+}
+
+export interface OffenderTimelineEvent {
+  date: string
+  type: 'accused' | 'victim' | 'witness' | 'arrest' | 'chargesheet'
+  label: string
+  fir_id: number
+}
+
+// -- Sociological Crime Insights (Agent 2 workstream) -----------------------
+// Mirrors backend/intelligence/sociological_insights.py's build_dashboard()
+// / build_report() output exactly — see that file for what's real vs a
+// placeholder/extension-point.
+
+export interface DemographicBreakdown {
+  sample_size: number
+  gender_distribution: Record<string, number>
+  age_bracket_distribution: Record<string, number>
+  occupation_distribution: Record<string, number>
+}
+
+export interface SocioeconomicAnalysis {
+  occupation_crime_correlation: Record<string, Record<string, number>>
+  note: string
+  unavailable: Record<string, string>
+}
+
+export interface RepeatOffenderCommunities {
+  count: number
+  person_ids: number[]
+  method: string
+}
+
+export interface FamilyCrimeLinks {
+  count: number
+  links: { person_a: number; person_b: number; strength: number }[]
+  method: string
+}
+
+export interface GangIndicators {
+  count: number
+  person_ids: number[]
+  organizations: Record<string, number>
+  method: string
+}
+
+export interface CommunityVulnerability {
+  by_district_crime_density: { district: string; crime_count: number }[]
+  method: string
+}
+
+export interface SocialRiskFactors {
+  repeat_offender_communities: RepeatOffenderCommunities
+  family_crime_links: FamilyCrimeLinks
+  gang_indicators: GangIndicators
+  community_vulnerability: CommunityVulnerability
+}
+
+export interface UnavailableDimension {
+  available: false
+  reason: string
+}
+
+export interface CorrelationMatrix {
+  gender_by_crime_type: Record<string, Record<string, number>>
+  age_bracket_by_crime_type: Record<string, Record<string, number>>
+  sample_size: number
+  method: string
+}
+
+export interface SociologicalDashboard {
+  scope: {
+    accused_sample_size: number
+    victim_sample_size: number
+    scoped_to_investigation: boolean
+  }
+  demographics: {
+    accused: DemographicBreakdown
+    victims: DemographicBreakdown
+  }
+  socioeconomic_analysis: SocioeconomicAnalysis
+  social_risk_factors: SocialRiskFactors
+  urbanization_analysis: UnavailableDimension | { available: true; crime_count_by_urbanization_tier: Record<string, number> }
+  migration_analysis: UnavailableDimension | { available: true; accused_count_by_origin_district: Record<string, number> }
+  economic_stress_analysis: UnavailableDimension | { available: true; district_crime_vs_economic_indicators: Record<string, unknown> }
+  education_analysis: UnavailableDimension | { available: true; accused_count_by_education_level: Record<string, number> }
+  correlation_matrix: CorrelationMatrix
+  data_availability: Record<string, string>
+}
+
+export interface SociologicalReport {
+  executive_summary: string
+  key_findings: string[]
+  risk_factors: Record<string, unknown>[]
+  evidence: string[]
+  recommendations: string[]
+  confidence: { score: number; basis: string }
+  supporting_data: SociologicalDashboard
+}
+
+// -- Forecasting & Early Warning Engine (Requirement 8) ---------------------
+// Mirrors backend/forecasting/summary_engine.py's generate_forecast_dashboard()
+// output. Deterministic — no LLM anywhere in this package.
+
+export interface TrendForecast {
+  label: string
+  current: number
+  predicted: number
+  growth: number
+  confidence: number
+  method: string
+  months_used: number
+  reason: string
+  crime_type?: string | null
+  district?: string | null
+  target_month?: string
+}
+
+export interface HotspotPrediction {
+  district: string
+  predicted_risk: 'High' | 'Medium' | 'Low'
+  probability: number
+  expected_incidents: number
+  confidence: number
+  evidence: {
+    currently_a_hotspot: boolean
+    trend_growth_pct: number
+    repeat_offenders_in_district: number
+    festival_season_share: number
+  }
+  neighboring_hotspot_influence:
+    | { available: false; reason: string }
+    | { available: true; neighbors: string[]; avg_neighbor_growth_pct: number }
+}
+
+export interface RepeatAlert {
+  alert: string
+  severity: 'Critical' | 'High' | 'Medium' | 'Low'
+  occurrences: number
+  window_days: number | null
+  recommendation: string
+  district?: string
+  location?: string
+  [key: string]: unknown
+}
+
+export interface RepeatAlerts {
+  repeat_locations: RepeatAlert[]
+  repeat_accused: RepeatAlert[]
+  repeat_mo: RepeatAlert[]
+  repeat_victim_groups: RepeatAlert[]
+  repeat_crime_types: RepeatAlert[]
+}
+
+export interface GangAlert {
+  gang_id: string
+  members: number
+  member_person_ids: number[]
+  activity_growth: number
+  risk: 'Critical' | 'High' | 'Medium' | 'Low'
+  category: 'Emerging' | 'Growing' | 'High-risk' | 'Dormant' | 'Stable'
+  district: string | null
+  confirmed_org_membership: boolean
+  most_central_person_id: number | null
+  evidence: Record<string, number>
+  method: string
+}
+
+export interface EarlyWarning {
+  title: string
+  severity: 'Critical' | 'High' | 'Medium' | 'Low'
+  confidence: number
+  predicted_date: string
+  evidence: string[]
+  recommended_actions: string[]
+}
+
+export interface ForecastDashboard {
+  executive_summary: string
+  forecast_cards: {
+    overall: TrendForecast
+    by_crime_type: TrendForecast[]
+  }
+  upcoming_hotspots: HotspotPrediction[]
+  emerging_crime_types: TrendForecast[]
+  gang_alerts: GangAlert[]
+  repeat_alerts: RepeatAlerts
+  prediction_timeline: TrendForecast[]
+  recommendations: string[]
+  early_warnings: EarlyWarning[]
+}

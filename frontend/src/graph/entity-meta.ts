@@ -53,6 +53,14 @@ export const ENTITY_META: Record<GraphNodeType, EntityMeta> = {
 
 export const ALL_NODE_TYPES = Object.keys(ENTITY_META) as GraphNodeType[]
 
+/** Translated display label for a node type — entity-meta.ts itself
+ * stays a plain data module (no hooks), so callers pass their own `t`
+ * from useLanguage(). Backed by resources.py's `entity_labels` section;
+ * falls back to the canonical English label if a key is ever missing. */
+export function entityLabel(type: GraphNodeType, t: (key: string, fallback?: string) => string): string {
+  return t(`entity_labels.${type}`, ENTITY_META[type].label)
+}
+
 // Not a full hand-authored table — see 02-API-CONTRACTS.md: derive from
 // SNAKE_CASE unless a specific one reads badly enough to override here.
 const EDGE_LABEL_OVERRIDES: Partial<Record<GraphEdgeType, string>> = {

@@ -9,6 +9,7 @@ import { useAuth } from '@/auth/AuthProvider'
 import { hasPermission } from '@/lib/permissions'
 import { formatRelativeTime } from '@/lib/format'
 import { useToast } from '@/components/layout/ToastProvider'
+import { useLanguage } from '@/providers/LanguageProvider'
 import type { ReviewStatus } from '@/lib/types'
 
 // Reviews are session-scoped ("Draft -> In Review -> Approved/Rejected"
@@ -32,6 +33,7 @@ export function SessionReviewPanel({ sessionId }: { sessionId: number }) {
   const decideReview = useDecideReview(sessionId)
   const [notes, setNotes] = useState('')
   const toast = useToast()
+  const { t } = useLanguage()
 
   const pending = reviews?.find((r) => r.status === 'in_review')
 
@@ -58,7 +60,7 @@ export function SessionReviewPanel({ sessionId }: { sessionId: number }) {
                       onClick={() =>
                         decideReview.mutate(
                           { reviewId: pending.id, approve: true, actor_officer_id: user?.officer_id ?? undefined },
-                          { onSuccess: () => toast.show('Review approved') },
+                          { onSuccess: () => toast.show(t('notifications.review_approved', 'Review approved')) },
                         )
                       }
                       isLoading={decideReview.isPending}
@@ -71,7 +73,7 @@ export function SessionReviewPanel({ sessionId }: { sessionId: number }) {
                       onClick={() =>
                         decideReview.mutate(
                           { reviewId: pending.id, approve: false, actor_officer_id: user?.officer_id ?? undefined },
-                          { onSuccess: () => toast.show('Review rejected', 'info') },
+                          { onSuccess: () => toast.show(t('notifications.review_rejected', 'Review rejected'), 'info') },
                         )
                       }
                       isLoading={decideReview.isPending}
@@ -99,7 +101,7 @@ export function SessionReviewPanel({ sessionId }: { sessionId: number }) {
                       {
                         onSuccess: () => {
                           setNotes('')
-                          toast.show('Review requested')
+                          toast.show(t('notifications.review_requested', 'Review requested'))
                         },
                       },
                     )

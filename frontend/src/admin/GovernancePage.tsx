@@ -3,21 +3,23 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Button } from '@/components/ui/Button'
 import { useRetentionPolicy, useRunRetentionSweep } from '@/lib/queries/governance'
+import { useLanguage } from '@/providers/LanguageProvider'
 
 export function GovernancePage() {
   const { data: policy, isLoading } = useRetentionPolicy()
   const runSweep = useRunRetentionSweep()
+  const { t } = useLanguage()
 
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold text-text">Governance</h1>
-        <p className="text-sm text-muted">Data retention policy for this deployment.</p>
+        <h1 className="text-2xl font-semibold text-text">{t('admin_pages.governance_title', 'Governance')}</h1>
+        <p className="text-sm text-muted">{t('admin_pages.governance_subtitle', 'Data retention policy for this deployment.')}</p>
       </div>
 
       <Card>
         <CardHeader
-          title="Retention policy"
+          title={t('admin_pages.retention_policy', 'Retention policy')}
           action={
             <ShieldCheck className="h-4 w-4 text-accent" aria-hidden />
           }

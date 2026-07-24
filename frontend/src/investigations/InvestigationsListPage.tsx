@@ -10,20 +10,22 @@ import { useSessions } from '@/lib/queries/sessions'
 import { priorityTone, statusTone } from '@/lib/status-tone'
 import { formatRelativeTime } from '@/lib/format'
 import type { SessionStatus } from '@/lib/types'
+import { useLanguage } from '@/providers/LanguageProvider'
 import { cn } from '@/lib/cn'
 
-const STATUS_TABS: { label: string; value: SessionStatus | undefined }[] = [
-  { label: 'All', value: undefined },
-  { label: 'Open', value: 'open' },
-  { label: 'Reopened', value: 'reopened' },
-  { label: 'Closed', value: 'closed' },
-  { label: 'Archived', value: 'archived' },
-]
-
 export function InvestigationsListPage() {
+  const { t } = useLanguage()
   const [status, setStatus] = useState<SessionStatus | undefined>(undefined)
   const [search, setSearch] = useState('')
   const { data, isLoading } = useSessions({ status })
+
+  const STATUS_TABS: { label: string; value: SessionStatus | undefined }[] = [
+    { label: t('investigations.tab_all', 'All'), value: undefined },
+    { label: t('investigations.tab_open', 'Open'), value: 'open' },
+    { label: t('investigations.tab_reopened', 'Reopened'), value: 'reopened' },
+    { label: t('investigations.tab_closed', 'Closed'), value: 'closed' },
+    { label: t('investigations.tab_archived', 'Archived'), value: 'archived' },
+  ]
 
   const filtered = (data ?? []).filter((s) =>
     search.trim()
@@ -37,14 +39,14 @@ export function InvestigationsListPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-text">Investigations</h1>
+          <h1 className="text-2xl font-semibold text-text">{t('investigations.title', 'Investigations')}</h1>
           <p className="mt-1 text-sm text-muted">
-            All sessions you have access to.
+            {t('investigations.subtitle', 'All sessions you have access to.')}
           </p>
         </div>
         <div className="w-64">
           <Input
-            placeholder="Search by title or code…"
+            placeholder={t('investigations.search_placeholder', 'Search by title or code…')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -52,10 +54,10 @@ export function InvestigationsListPage() {
       </div>
 
       <Tabs
-        items={STATUS_TABS.map((t) => ({
-          label: t.label,
-          value: t.value ?? 'all',
-          count: t.value === undefined ? data?.length : data?.filter((s) => s.status === t.value).length,
+        items={STATUS_TABS.map((s) => ({
+          label: s.label,
+          value: s.value ?? 'all',
+          count: s.value === undefined ? data?.length : data?.filter((sess) => sess.status === s.value).length,
         }))}
         value={tabValue}
         onChange={(v) => setStatus(v === 'all' ? undefined : v as SessionStatus)}
@@ -72,11 +74,11 @@ export function InvestigationsListPage() {
           ) : filtered.length === 0 ? (
             <EmptyState
               icon={<FolderSearch className="h-6 w-6" />}
-              title="No investigations match"
+              title={t('investigations.no_match_title', 'No investigations match')}
               description={
                 search
-                  ? 'Try a different search term or clear the filter.'
-                  : 'No sessions exist for this status yet.'
+                  ? t('investigations.no_match_with_search', 'Try a different search term or clear the filter.')
+                  : t('investigations.no_match_without_search', 'No sessions exist for this status yet.')
               }
             />
           ) : (
@@ -93,7 +95,7 @@ export function InvestigationsListPage() {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-text">{session.title}</p>
                       <p className="font-mono text-xs text-muted">
-                        {session.session_code} · updated {formatRelativeTime(session.updated_at)}
+                        {session.session_code} · {t('investigations.updated', 'updated')} {formatRelativeTime(session.updated_at)}
                       </p>
                     </div>
                     <div className="flex shrink-0 gap-2">
