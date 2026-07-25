@@ -1,0 +1,30 @@
+{
+  "defaults": {
+    "project": 1,
+    "env": 1
+  },
+  "actives": {
+    "project": 1,
+    "env": 1
+  },
+  "projects": [
+    {
+      "idx": 1,
+      "id": "54736000000029001",
+      "name": "SHERLOCK",
+      "domain": {
+        "id": "50044342343",
+        "name": "sherlock-60076481229.development"
+      },
+      "timezone": "Asia/Kolkata",
+      "env": [
+        {
+          "idx": 1,
+          "id": "60076481229",
+          "name": "Development",
+          "type": 3
+        }
+      ]
+    }
+  ]
+}

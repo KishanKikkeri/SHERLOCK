@@ -47,6 +47,7 @@ interface ConversationState {
   messages: ChatMessage[]
   timeline: TimelineStep[]
   isStreaming: boolean
+  showTimeline: boolean   // Stage F3: only show timeline for investigation intents
   muted: boolean
 
   setSessionId: (id: number | undefined) => void
@@ -55,6 +56,7 @@ interface ConversationState {
   applyStreamEvent: (event: ConversationStreamEvent) => void
   clearTimeline: () => void
   setStreaming: (streaming: boolean) => void
+  setShowTimeline: (show: boolean) => void
   toggleMuted: () => void
   resetConversation: () => void
 }
@@ -64,6 +66,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   messages: [],
   timeline: [],
   isStreaming: false,
+  showTimeline: false,
   muted: false,
 
   setSessionId: (id) => set({ sessionId: id }),
@@ -89,18 +92,22 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     } else if (event.event_type === 'agent_failed') {
       set((s) => ({ timeline: [...s.timeline, { agent, status: 'failed', message }] }))
     } else if (event.event_type === 'investigation_started' || event.event_type === 'agent_started') {
-      set((s) => ({ timeline: [...s.timeline, { agent, status: 'started', message }] }))
+      // An investigation was triggered — show the timeline
+      set((s) => ({ showTimeline: true, timeline: [...s.timeline, { agent, status: 'started', message }] }))
+    } else if (event.event_type === 'thinking') {
+      // "Let me look into that..." — show timeline is coming
+      set((s) => ({ showTimeline: true, timeline: [...s.timeline, { agent, status: 'started', message }] }))
     }
-    // report_ready / clarification_needed / topic_reset / error are all
-    // handled by the caller (useConversation) directly against `messages`,
-    // not folded into the timeline — they're conversational outcomes, not
-    // per-agent execution steps.
+    // conversation_reply / report_ready / clarification_needed / topic_reset
+    // / error are handled by the caller (useConversation) directly against
+    // `messages`, not folded into the timeline.
     void get
   },
 
-  clearTimeline: () => set({ timeline: [] }),
+  clearTimeline: () => set({ timeline: [], showTimeline: false }),
   setStreaming: (streaming) => set({ isStreaming: streaming }),
+  setShowTimeline: (show) => set({ showTimeline: show }),
   toggleMuted: () => set((s) => ({ muted: !s.muted })),
 
-  resetConversation: () => set({ sessionId: undefined, messages: [], timeline: [], isStreaming: false }),
+  resetConversation: () => set({ sessionId: undefined, messages: [], timeline: [], isStreaming: false, showTimeline: false }),
 }))

@@ -30,7 +30,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response as FastAPIResponse, StreamingResponse
 from pydantic import BaseModel
 
-from backend.conversation.manager import ConversationManager
+from backend.conversation.orchestrator import ConversationOrchestrator
 from backend.database.config import SessionLocal
 from backend.database.models import AuditAction
 from backend.database.service import DatabaseService
@@ -61,8 +61,8 @@ async def post_message(payload: MessageRequest, ctx: AuthContext = Depends(Requi
 
     db = SessionLocal()
     try:
-        manager = ConversationManager(db)
-        result = await manager.handle_message(
+        orchestrator = ConversationOrchestrator(db, roles=ctx.roles)
+        result = await orchestrator.handle_message(
             payload.session_id, payload.message,
             officer_id=ctx.officer_id, language=payload.language,
             enable_discussion=payload.enable_discussion,
@@ -91,8 +91,8 @@ async def post_stream(payload: MessageRequest, ctx: AuthContext = Depends(Requir
     async def event_source():
         db = SessionLocal()
         try:
-            manager = ConversationManager(db)
-            async for event in manager.stream_events(
+            orchestrator = ConversationOrchestrator(db, roles=ctx.roles)
+            async for event in orchestrator.stream_events(
                 payload.session_id, payload.message,
                 officer_id=ctx.officer_id, language=payload.language,
                 enable_discussion=payload.enable_discussion,
@@ -182,7 +182,7 @@ def get_chat_history(session_id: int, _ctx=Depends(RequirePermission(VIEW_CASE))
 def post_summarize(session_id: int, _ctx=Depends(RequirePermission(VIEW_CASE))):
     db = SessionLocal()
     try:
-        manager = ConversationManager(db)
+        orchestrator = ConversationOrchestrator(db)
         from backend.conversation.summarizer import summarize_now
         return summarize_now(db, session_id)
     except Exception:
@@ -212,8 +212,8 @@ def post_export_pdf(session_id: int, language: str | None = None, request: Reque
 
     db = SessionLocal()
     try:
-        manager = ConversationManager(db)
-        pdf_bytes, warnings = manager.export_last_report_as_pdf(session_id, language=language)
+        orchestrator = ConversationOrchestrator(db, roles=ctx.roles)
+        pdf_bytes, warnings = orchestrator.export_last_report_as_pdf(session_id, language=language)
         if pdf_bytes is None:
             raise HTTPException(status_code=404, detail=warnings[0] if warnings else
                                  "No investigation findings recorded for this session yet.")
@@ -247,16 +247,16 @@ def post_export_pdf(session_id: int, language: str | None = None, request: Reque
 @router.delete("/{session_id}/history")
 def delete_history(session_id: int, ctx: AuthContext = Depends(RequirePermission(RUN_INVESTIGATION))):
     """Soft-archives every turn and records a topic-reset marker — see
-    `ConversationManager._clear_history`'s docstring for why this is
-    never a physical delete (Stage E5 governance rule)."""
+    `ConversationOrchestrator._clear_history`'s docstring for why this is
+    never a physical delete (Stage E5 governance rule)"""
     db = SessionLocal()
     try:
-        manager = ConversationManager(db)
-        turns = manager.memory.get_history(session_id)
+        orchestrator = ConversationOrchestrator(db, roles=ctx.roles)
+        turns = orchestrator.memory.get_history(session_id)
         if not turns:
             return {"session_id": session_id, "archived_turns": 0}
 
-        manager._clear_history(session_id, matched_phrase="cleared via DELETE /conversation/history")
+        orchestrator._clear_history(session_id, matched_phrase="cleared via DELETE /conversation/history")
 
         security_audit.record(
             db, AuditAction.RECORD_ARCHIVED,

@@ -61,17 +61,25 @@ def serve_frontend():
 
 
 if __name__ == "__main__":
+    import os
+
     import uvicorn
+
+    # Catalyst AppSail assigns the port to listen on via this env var and
+    # only routes traffic to it — it does not let the app choose its own
+    # port. Falls back to 8000 for local dev / docker-compose, where this
+    # var is unset. See DEPLOYMENT_PLAN.md, Phase 0.
+    port = int(os.getenv("X_ZOHO_CATALYST_LISTEN_PORT", "8000"))
 
     print("\n  ╔══════════════════════════════════════════╗")
     print("  ║  SHERLOCK Crime Intelligence Platform    ║")
-    print("  ║  Command Center: http://localhost:8000   ║")
-    print("  ║  API docs:       http://localhost:8000/docs ║")
+    print(f"  ║  Command Center: http://localhost:{port}   ║")
+    print(f"  ║  API docs:       http://localhost:{port}/docs ║")
     print("  ╚══════════════════════════════════════════╝\n")
 
     uvicorn.run(
         "backend.app.server:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=False,
     )

@@ -1,0 +1,29 @@
+[debug] [2026-07-25T12:06:31.561Z] : 
+[debug] [2026-07-25T12:06:31.562Z] : ----------------------------------------------------------------------
+[debug] [2026-07-25T12:06:31.562Z] : Command:      D:\Languages\NodeJS\node.exe C:\Users\Asus\AppData\Roaming\npm\node_modules\zcatalyst-cli\lib\bin\catalyst.js deploy
+[debug] [2026-07-25T12:06:31.562Z] : CLI Version:  1.27.0
+[debug] [2026-07-25T12:06:31.563Z] : Platform:     win32
+[debug] [2026-07-25T12:06:31.563Z] : Node Version: v24.15.0
+[debug] [2026-07-25T12:06:31.563Z] : Time:         Sat Jul 25 2026 17:36:31 GMT+0530 (India Standard Time)
+[debug] [2026-07-25T12:06:31.563Z] : ----------------------------------------------------------------------
+[debug] [2026-07-25T12:06:31.563Z] : 
+[debug] [2026-07-25T12:06:32.240Z] : > authorizing via signed-in user option
+[debug] [2026-07-25T12:06:32.240Z] : > command requires scopes: ["ZohoCatalyst.projects.ALL","ZohoCatalyst.functions.ALL","ZohoCatalyst.webapp.ALL","ZohoCatalyst.appsail.Update"]
+[debug] [2026-07-25T12:06:32.309Z] : >>>> HTTP REQUEST : GET https://api.catalyst.zoho.in/baas/v1/project/54736000000029001 
+
+[debug] [2026-07-25T12:06:32.622Z] : <<<< HTTP RESPONSE : 200
+Response Headers: {"server":"ZGS","date":"Sat, 25 Jul 2026 12:06:32 GMT","content-type":"application/vnd.catalyst.v2+json","transfer-encoding":"chunked","connection":"keep-alive","x-content-type-options":"nosniff","cache-control":"private,no-cache,no-store,max-age=0,must-revalidate","pragma":"no-cache","expires":"Thu, 01 Jan 1970 00:00:00 GMT","x-frame-options":"DENY","strict-transport-security":"max-age=64072000; includeSubDomains; preload"}
+
+[debug] [2026-07-25T12:06:32.626Z] : >>>> HTTP REQUEST : GET https://api.catalyst.zoho.in/baas/v1/project/54736000000029001/environment 
+
+[debug] [2026-07-25T12:06:32.714Z] : <<<< HTTP RESPONSE : 200
+Response Headers: {"server":"ZGS","date":"Sat, 25 Jul 2026 12:06:32 GMT","content-type":"application/vnd.catalyst.v2+json","transfer-encoding":"chunked","connection":"keep-alive","x-content-type-options":"nosniff","cache-control":"private,no-cache,no-store,max-age=0,must-revalidate","pragma":"no-cache","expires":"Thu, 01 Jan 1970 00:00:00 GMT","x-frame-options":"DENY","strict-transport-security":"max-age=64072000; includeSubDomains; preload"}
+
+[debug] [2026-07-25T12:06:39.196Z] : >>>> HTTP REQUEST : GET https://api.catalyst.zoho.in/baas/v1/project/54736000000029001/appsail/get-signature?name=sherlock-backend 
+
+[debug] [2026-07-25T12:06:39.531Z] : <<<< HTTP RESPONSE : 200
+Response Headers: {"server":"ZGS","date":"Sat, 25 Jul 2026 12:06:39 GMT","content-type":"application/vnd.catalyst.v2+json","transfer-encoding":"chunked","connection":"keep-alive","x-content-type-options":"nosniff","cache-control":"private,no-cache,no-store,max-age=0,must-revalidate","pragma":"no-cache","expires":"Thu, 01 Jan 1970 00:00:00 GMT","x-frame-options":"DENY","strict-transport-security":"max-age=64072000; includeSubDomains; preload"}
+
+[debug] [2026-07-25T12:06:39.537Z] : >>>> HTTP REQUEST : PUT https://cr-60076481229-54736000000029001.zohostratus.in/_signed/appSail/CLI/Orphan/MTc4NDk4MTE5OTA0N19zaGVybG9jay1iYWNrZW5k?organizationId=60055482534&stsDate=1784981197071&stsCredential=60009145213-60055482534&stsExpiresAfter=1800&stsSignedHeaders=host&stsSignature=Mmu4aQaW9hPmlZdMKras2ukYzVAF__cx8tDbLxFJCio 
+<request body omitted>
+

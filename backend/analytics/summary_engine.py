@@ -203,12 +203,10 @@ def generate_dashboard_summary(session: Session, crime_type: Optional[str] = Non
     mo_enrichment = modus_engine.mo_enrichment_summary(session, crime_type=crime_type, district=district)
 
     kpi_cards = _kpi_cards(trend, yoy, top_districts, spikes, outbreaks)
-    executive_summary = _executive_summary(trend, type_distribution, top_hotspots, outbreaks, spikes, repeat_sites, festival)
     recommendations = _recommendations(spikes, outbreaks, festival, repeat_sites)
 
-    return {
+    dashboard_data = {
         "kpi_cards": kpi_cards,
-        "executive_summary": executive_summary,
         "charts": {
             "trend": trend,
             "year_over_year": yoy,
@@ -232,3 +230,15 @@ def generate_dashboard_summary(session: Session, crime_type: Optional[str] = Non
         "mo_enrichment": mo_enrichment,
         "recommendations": recommendations,
     }
+
+    # Generate executive summary using pluggable LLM (with deterministic template fallback)
+    from backend.conversation.llm import get_conversation_llm
+    try:
+        llm = get_conversation_llm()
+        executive_summary = llm.format_analytics(dashboard_data)
+    except Exception:
+        logger.warning("LLM analytics formatting failed, falling back to template", exc_info=True)
+        executive_summary = _executive_summary(trend, type_distribution, top_hotspots, outbreaks, spikes, repeat_sites, festival)
+
+    dashboard_data["executive_summary"] = executive_summary
+    return dashboard_data

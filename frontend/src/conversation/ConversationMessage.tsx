@@ -1,10 +1,13 @@
-import { AlertTriangle, Bot, User } from 'lucide-react'
+import { useState } from 'react'
+import { AlertTriangle, Bot, ChevronDown, ChevronRight, FileText, User } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { EvidenceCard } from '@/conversation/EvidenceCard'
 import type { ChatMessage } from '@/conversation/store'
 
 export function ConversationMessage({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user'
+  const [evidenceExpanded, setEvidenceExpanded] = useState(false)
+  const citationCount = message.citations?.length ?? 0
 
   return (
     <div className={cn('flex gap-3', isUser && 'flex-row-reverse')}>
@@ -44,7 +47,23 @@ export function ConversationMessage({ message }: { message: ChatMessage }) {
           )}
         </div>
 
-        {message.citations && message.citations.length > 0 && (
+        {/* Stage F3: Progressive disclosure — evidence collapsed by default */}
+        {citationCount > 0 && (
+          <button
+            onClick={() => setEvidenceExpanded(!evidenceExpanded)}
+            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-surface-raised hover:text-text"
+          >
+            {evidenceExpanded ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
+            <FileText className="h-3 w-3" />
+            {citationCount} piece{citationCount !== 1 ? 's' : ''} of evidence
+          </button>
+        )}
+
+        {evidenceExpanded && message.citations && message.citations.length > 0 && (
           <div className="flex w-full flex-col gap-1.5">
             {message.citations.map((c, i) => (
               <EvidenceCard key={i} citation={c} />

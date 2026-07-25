@@ -15,7 +15,7 @@ const STARTER_QUESTIONS = [
 ]
 
 function ConversationBody() {
-  const { messages, timeline, isStreaming, sendMessage } = useConversationContext()
+  const { messages, timeline, isStreaming, showTimeline, sendMessage } = useConversationContext()
   const scrollRef = useRef<HTMLDivElement>(null)
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant' && !m.pending)
 
@@ -41,7 +41,7 @@ function ConversationBody() {
               {messages.map((m) => (
                 <ConversationMessage key={m.id} message={m} />
               ))}
-              {isStreaming && <AgentExecutionTimeline steps={timeline} />}
+              {isStreaming && showTimeline && <AgentExecutionTimeline steps={timeline} />}
             </div>
           )}
         </div>

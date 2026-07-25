@@ -8,3 +8,8 @@ node_modules/
 dist/
 build/
 .DS_Store
+.vscode
+.pytest_cache
+docs/Confidential
+docs/DATABASE_ANALYSIS
+docs/Stage_Reports

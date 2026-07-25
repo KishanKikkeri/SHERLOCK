@@ -19,3 +19,6 @@ fonttools>=4.50         # Stage D, Sprint 4 — validates the bundled Kannada fo
 pyjwt>=2.8              # Stage E1 — JWT access tokens
 argon2-cffi>=23.1       # Stage E1 — argon2id password hashing
 slowapi>=0.1.9          # Stage E6 — rate limiting (installed now, wired up in Sprint E6)
+openai>=1.0             # Stage F3 — OpenAI adapter
+google-genai>=0.1       # Stage F3 — Google Gemini adapter
+

@@ -197,6 +197,74 @@ class ConversationMemoryService:
                 all_findings.append(f)
         return all_findings
 
+    # -- Stage F3: context snapshot for conversational intelligence -----------
+
+    def get_context_snapshot(self, session_id: int) -> dict:
+        """Lightweight summary of the current conversation state for the
+        intent classifier and conversation planner. Avoids loading all
+        findings — just enough to decide whether a follow-up can be
+        answered from memory or needs a new investigation.
+
+        Returns a dict with:
+          - active_entities: persons, FIRs, accounts currently in scope
+          - selected_case: the FIR being discussed (last_fir_id)
+          - active_suspects: person names under discussion
+          - last_investigation_summary: response_summary from last turn
+          - turn_count: how many turns in this session
+          - context_summary: the rolling summary (if any)
+          - has_pending_clarification: whether the last turn asked a question
+        """
+        last_turn = self.get_last_turn(session_id)
+        turns = self.get_history(session_id)
+        session_row = self.session.get(InvestigationSession, session_id)
+
+        if not last_turn:
+            return {
+                "active_entities": {},
+                "selected_case": None,
+                "active_suspects": [],
+                "last_investigation_summary": None,
+                "turn_count": 0,
+                "context_summary": None,
+                "has_pending_clarification": False,
+            }
+
+        # Build active entities from the last turn's entity_mentions
+        active_entities = {}
+        if last_turn.entity_mentions_json:
+            for m in json.loads(last_turn.entity_mentions_json):
+                kind = m["kind"]
+                active_entities.setdefault(kind, []).append({
+                    "id": m["id"],
+                    "label": m["label"],
+                })
+
+        # Active suspects = persons mentioned in the last turn
+        active_suspects = [
+            e["label"] for e in active_entities.get("person", [])
+        ]
+
+        return {
+            "active_entities": active_entities,
+            "selected_case": last_turn.last_fir_id,
+            "active_suspects": active_suspects,
+            "last_investigation_summary": last_turn.response_summary,
+            "turn_count": len(turns),
+            "context_summary": session_row.context_summary if session_row else None,
+            "has_pending_clarification": bool(last_turn.pending_clarification_json),
+        }
+
+    def get_relevant_findings(self, session_id: int, query: str | None = None) -> list[dict]:
+        """Retrieves findings from memory relevant to a follow-up query.
+
+        For now this returns all findings from the session (de-duplicated
+        via get_all_findings). A future upgrade could do semantic matching
+        against `query` to narrow the results, but even returning everything
+        is vastly cheaper than re-running the 20-agent pipeline, and the
+        conversational responder will select what to present.
+        """
+        return self.get_all_findings(session_id)
+
     # -- Sprint 2: resolution (disambiguation / clarification / reset) -------
 
     def resolve_turn(self, session_id: int, raw_query: str) -> ResolveResult:

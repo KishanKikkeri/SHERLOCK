@@ -289,9 +289,9 @@ class VoiceCommandRouter:
         # summarize/clear-history/export) as the exact same words typed
         # into the Conversation screen would, not just the investigation
         # pipeline's default path.
-        from backend.conversation.manager import ConversationManager
-        manager = ConversationManager(self.session)
-        result = await manager.handle_message(session_id, text, language=self.language)
+        from backend.conversation.orchestrator import ConversationOrchestrator
+        orchestrator = ConversationOrchestrator(self.session)
+        result = await orchestrator.handle_message(session_id, text, language=self.language)
         final_report = result.get("final_report")
         narrative = result.get("reply") or "I didn't find anything on that."
         response_language = (final_report or {}).get("narrative_language", self.language)

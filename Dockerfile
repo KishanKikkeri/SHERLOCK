@@ -21,8 +21,10 @@ RUN npm run build
 FROM python:3.11-slim
 WORKDIR /app
 
-# System deps for psycopg2 (only needed if DATABASE_URL points at Postgres)
-RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev \
+# System deps: gcc/libpq-dev for psycopg2 (only needed if DATABASE_URL points
+# at Postgres); espeak-ng so SHERLOCK_TTS_PROVIDER=espeak (the default) works
+# instead of silently returning empty audio (see backend/voice/text_to_speech.py)
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev espeak-ng \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt ./backend/requirements.txt

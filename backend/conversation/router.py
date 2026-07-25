@@ -32,6 +32,15 @@ class ConversationIntent(str, Enum):
     EXPORT_PDF = "export_pdf"        # "export this as a pdf / give me a report"
     CLEAR_HISTORY = "clear_history"  # "clear this conversation / start fresh"
 
+    # Stage F3 — Conversational Intelligence (new, additive). Used by the
+    # LLM/regex intent classifier in intent.py, never produced by route()
+    # itself (which retains its existing INVESTIGATE default for ambiguous
+    # input — safer failure mode, per its own docstring).
+    GREETING = "greeting"                        # "Hi", "Hello", "How are you?"
+    CHITCHAT = "chitchat"                        # "Explain cybercrime", "What can you do?"
+    FOLLOWUP = "followup"                        # answerable from session memory
+    CLARIFICATION_RESPONSE = "clarification_response"  # answering a pending clarification
+
 
 @dataclass
 class RoutedIntent:

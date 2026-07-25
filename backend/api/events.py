@@ -41,6 +41,13 @@ class EventType(str, Enum):
     # requested); existing English-only callers never see this event.
     QUERY_TRANSLATED = "query_translated"
 
+    # Stage F3 — Conversational Intelligence (new, additive). Sent for
+    # non-investigation intents (greetings, chitchat, follow-ups answered
+    # from memory) where the pipeline is never invoked. Existing callers
+    # that only listen for REPORT_READY are unaffected.
+    CONVERSATION_REPLY = "conversation_reply"
+    THINKING = "thinking"  # "Let me look into that..." status indicator
+
 
 def make_event(event_type: EventType, agent: str = None, message: str = None,
                data: Any = None) -> dict:

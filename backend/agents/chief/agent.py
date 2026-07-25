@@ -76,11 +76,9 @@ class ChiefAgent:
         rejected = [f for f in validated if not f.get("validated")]
         language = state.get("language") or "en"
 
-        narrative = self._generate_narrative(query, accepted, language)
-
         report = {
             "query": query,
-            "narrative": narrative,
+            "narrative": "",  # Narrative generation removed in favor of structured findings only
             "narrative_language": language,
             "findings": accepted,
             "rejected_findings": rejected,
@@ -98,26 +96,11 @@ class ChiefAgent:
         }
 
     # -----------------------------------------------------------------
-    # Narrative generation: Claude if available, deterministic fallback otherwise
+    # Narrative generation: Disabled in F3 structured mode
     # -----------------------------------------------------------------
     def _generate_narrative(self, query: str, accepted_findings: list, language: str = "en") -> str:
-        if not accepted_findings:
-            message = ("No validated findings were available to answer this query. "
-                       "This may mean the relevant data wasn't found, or all findings "
-                       "were rejected for insufficient evidence.")
-            return localize_template_fallback(message, language)
+        return ""
 
-        if os.getenv("ANTHROPIC_API_KEY"):
-            try:
-                return self._generate_narrative_llm(query, accepted_findings, language)
-            except Exception:
-                logger.warning("LLM narrative generation failed, falling back to template", exc_info=True)
-                template = self._generate_narrative_template(query, accepted_findings) + \
-                    "\n\n(Note: AI-written narrative was unavailable for this report; " \
-                    "the summary above was generated from structured findings directly.)"
-                return localize_template_fallback(template, language)
-
-        return localize_template_fallback(self._generate_narrative_template(query, accepted_findings), language)
 
     def _generate_narrative_template(self, query: str, accepted_findings: list) -> str:
         lines = [f"Investigation summary for: \"{query}\"", ""]

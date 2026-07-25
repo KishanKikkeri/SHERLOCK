@@ -54,17 +54,37 @@ export function useConversation() {
           (event: ConversationStreamEvent) => {
             store.applyStreamEvent(event)
 
-            if (event.event_type === 'report_ready') {
+            if (event.event_type === 'conversation_reply') {
+              // Stage F3: instant reply (greeting, chitchat, followup) — no pipeline
+              const data = (event.data ?? {}) as Record<string, unknown>
+              const conversationResult = data.conversation_result as
+                | { reply: string; citations: unknown[]; suggested_questions: string[]; intent: string; session_id: number }
+                | undefined
+              if (conversationResult) {
+                store.setSessionId(conversationResult.session_id)
+                store.updateMessage(assistantId, {
+                  pending: false,
+                  text: conversationResult.reply,
+                  intent: conversationResult.intent,
+                  suggestedQuestions: (conversationResult.suggested_questions as string[]) ?? undefined,
+                })
+              } else {
+                store.updateMessage(assistantId, {
+                  pending: false,
+                  text: displayMessage(event) || '',
+                })
+              }
+            } else if (event.event_type === 'report_ready') {
               const data = (event.data ?? {}) as Record<string, unknown>
               const conversationResult = data.conversation_result as
                 | { reply: string; citations: unknown[]; suggested_questions: string[]; intent: string; session_id: number }
                 | undefined
               const finalReport = data.final_report as { narrative?: string } | null | undefined
+              // Stage F3: prefer conversational reply over raw narrative
+              const conversationalReply = data.conversational_reply as string | undefined
 
               if (conversationResult) {
-                // Meta-command (summarize/export/clear) — manager.py
-                // flattens these into a single report_ready carrying the
-                // full ConversationManager result under conversation_result.
+                // Meta-command (summarize/export/clear)
                 store.setSessionId(conversationResult.session_id)
                 store.updateMessage(assistantId, {
                   pending: false,
@@ -75,7 +95,7 @@ export function useConversation() {
                 if (typeof data.session_id === 'number') store.setSessionId(data.session_id)
                 store.updateMessage(assistantId, {
                   pending: false,
-                  text: (finalReport?.narrative as string) || displayMessage(event) || '',
+                  text: conversationalReply || (finalReport?.narrative as string) || displayMessage(event) || '',
                   citations: (data.citations as ChatMessage['citations']) ?? undefined,
                   suggestedQuestions: (data.suggested_questions as string[]) ?? undefined,
                 })
