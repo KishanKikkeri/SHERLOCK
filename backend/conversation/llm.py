@@ -23,6 +23,12 @@ from backend.language.prompting import language_directive
 
 logger = logging.getLogger(__name__)
 
+# claude-3-5-sonnet-20241022 (previously hardcoded here) was retired by
+# Anthropic on 2025-10-28 — every ClaudeAdapter call was silently failing
+# and falling back to the deterministic templated responder as a result.
+# Configurable so a future model retirement doesn't require a code change.
+CLAUDE_MODEL = os.getenv("SHERLOCK_CLAUDE_MODEL", "claude-sonnet-5")
+
 
 class LLMResult:
     """The result of running the Conversation LLM."""
@@ -133,7 +139,7 @@ class ClaudeAdapter(ConversationLLM):
             })
 
         response = self.client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model=CLAUDE_MODEL,
             max_tokens=400,
             system=system_prompt,
             messages=formatted_history,
@@ -182,7 +188,7 @@ class ClaudeAdapter(ConversationLLM):
         prompt = f"User query: {query}\n\nStructured findings:\n{findings_text}"
 
         response = self.client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model=CLAUDE_MODEL,
             max_tokens=400,
             system=system_prompt,
             messages=[{"role": "user", "content": prompt}],
@@ -203,7 +209,7 @@ class ClaudeAdapter(ConversationLLM):
         )
         prompt = f"Dashboard Data:\n{json.dumps(data, indent=2)}"
         response = self.client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model=CLAUDE_MODEL,
             max_tokens=300,
             system=system_prompt,
             messages=[{"role": "user", "content": prompt}],
@@ -217,7 +223,7 @@ class ClaudeAdapter(ConversationLLM):
         max_tokens: int = 400
     ) -> str:
         response = self.client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model=CLAUDE_MODEL,
             max_tokens=max_tokens,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
