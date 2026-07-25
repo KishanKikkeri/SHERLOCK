@@ -23,10 +23,29 @@ ranked, and counted instead of dumped verbatim. The raw `final_report`
 (all validated + rejected findings, full narrative) is always still
 available alongside this output for a "Show Agent Trace" accordion —
 see `backend/voice/command_router.py`, which attaches both.
+
+Priority 25/28/30 (Project-wide Language Awareness): everything this
+module builds — title, key findings, supporting evidence,
+recommendations, timeline labels — is composed from deterministic
+Python (counts, sorted lists, static phrases), not an LLM call, so
+"generate natively" doesn't apply the way it does to ChiefAgent's
+narrative. `build_executive_report(..., language=...)` instead
+localizes the assembled strings in one batch via `TranslationService`
+(see `_localize_executive_report`) — the same mechanism
+`_localize_report` in `backend/api/investigation_stream.py` already
+uses for specialist-agent finding summaries. The one field that can
+already be native is `summary` (a verbatim copy of
+`final_report["narrative"]`, which `ChiefAgent` may have generated
+directly in `language` — see `final_report["narrative_language"]`);
+`_localize_executive_report` skips re-translating it in that case to
+avoid garbling an already-correct narrative.
 """
 from __future__ import annotations
 
+import logging
 from collections import Counter
+
+logger = logging.getLogger(__name__)
 
 # Human-readable pluralization for the entity-type prefix used in
 # AgentFinding.source_entities (e.g. "person_123" -> "person"). Falls
@@ -75,11 +94,11 @@ def _risk_level(mean_confidence: float, finding_types: set, accepted_count: int)
     return "Low"
 
 
-def _empty_report(final_report: dict, title: str | None) -> dict:
+def _empty_report(final_report: dict, title: str | None, language: str = "en") -> dict:
     query = final_report.get("query", "")
     narrative = final_report.get("narrative", "") or ""
     rejected = final_report.get("rejected_findings", []) or []
-    return {
+    report = {
         "title": title or query or "Investigation report",
         "summary": narrative or "No validated findings were available for this query.",
         "confidence": 0,
@@ -93,15 +112,27 @@ def _empty_report(final_report: dict, title: str | None) -> dict:
         "entities": [],
         "timeline": [],
         "sources": sorted(set(final_report.get("agents_consulted", []))),
+        # Priority 25/28/30: which language every prose field above is
+        # actually in, so a consumer (e.g. AnalyticsTopicCard.tsx) can
+        # tell this report is already localized and skip a redundant
+        # (and potentially garbling) client-side re-translation pass.
+        "language": language,
     }
+    if language != "en":
+        report = _localize_executive_report(report, final_report, language)
+    return report
 
 
-def build_executive_report(final_report: dict, *, title: str | None = None) -> dict:
+def build_executive_report(final_report: dict, *, title: str | None = None, language: str = "en") -> dict:
     """Transform a Chief-Agent `final_report` into the Analytics card schema.
 
     `final_report` is exactly the dict `synthesis_node` produces:
     {query, narrative, findings, rejected_findings, agents_consulted}.
     `findings` here are already the *accepted* (validated) ones.
+
+    `language` (Priority 25/28/30, default "en"): localizes the assembled
+    prose fields (not the numeric/structural ones) — see module
+    docstring and `_localize_executive_report`.
     """
     accepted = final_report.get("findings", []) or []
     rejected = final_report.get("rejected_findings", []) or []
@@ -109,7 +140,7 @@ def build_executive_report(final_report: dict, *, title: str | None = None) -> d
     narrative = final_report.get("narrative", "") or ""
 
     if not accepted:
-        return _empty_report(final_report, title)
+        return _empty_report(final_report, title, language)
 
     # --- confidence ---------------------------------------------------
     confidences = [f.get("confidence", 0.0) for f in accepted]
@@ -184,7 +215,7 @@ def build_executive_report(final_report: dict, *, title: str | None = None) -> d
     # --- sources ----------------------------------------------------------------
     sources = sorted({f.get("agent_name", "") for f in accepted if f.get("agent_name")})
 
-    return {
+    report = {
         "title": title or query or "Investigation report",
         "summary": narrative,
         "confidence": confidence_pct,
@@ -196,4 +227,80 @@ def build_executive_report(final_report: dict, *, title: str | None = None) -> d
         "entities": entities[:25],
         "timeline": timeline[:10],
         "sources": sources,
+        # Priority 25/28/30 — see _empty_report's identical field for why.
+        "language": language,
     }
+    if language != "en":
+        report = _localize_executive_report(report, final_report, language)
+    return report
+
+
+def _localize_executive_report(report: dict, final_report: dict, language: str) -> dict:
+    """Batch-localizes this module's deterministic presentation-layer
+    prose (title/key_findings/supporting_evidence/recommendations/
+    timeline labels) into `language`. None of it comes from an LLM, so
+    "generate natively" doesn't apply the way it does to ChiefAgent's
+    narrative — translating the already-computed strings (same
+    mechanism `_localize_report` uses for specialist-agent finding
+    summaries in backend/api/investigation_stream.py) is the correct
+    fix here, not a re-implementation.
+
+    `summary` is skipped when it's already native — it's a verbatim
+    copy of `final_report["narrative"]`, which `ChiefAgent` may have
+    generated directly in `language` already (see
+    `final_report["narrative_language"]`); re-translating it would
+    garble an already-correct narrative. `metrics` (numeric, keyed by
+    machine-readable names the frontend matches on) and `entities`
+    (type/id pairs, not prose) are never touched, same as
+    `_localize_report` leaves finding metadata untouched. `sources`
+    (agent names) and `timeline[].agent` are proper nouns and are left
+    alone too.
+
+    Best-effort: on any translation failure, returns `report` unchanged
+    (English) — same degrade-to-original contract every other
+    `TranslationService` caller in this codebase follows.
+    """
+    from backend.language.translation_service import TranslationService
+
+    already_native_summary = final_report.get("narrative_language") == language
+    key_findings = report["key_findings"]
+    supporting_evidence = report["supporting_evidence"]
+    recommendations = report["recommendations"]
+    timeline_labels = [t["label"] for t in report["timeline"]]
+
+    texts: list[str] = []
+    if not already_native_summary and report["summary"]:
+        texts.append(report["summary"])
+    texts.append(report["title"])
+    texts.extend(key_findings)
+    texts.extend(supporting_evidence)
+    texts.extend(recommendations)
+    texts.extend(timeline_labels)
+
+    try:
+        results = TranslationService().batch_translate(texts, target_language=language, source_language="en")
+    except Exception:
+        logger.warning("Executive-report localization to %s failed; returning English text", language, exc_info=True)
+        return report
+
+    translated = [r.text for r in results]
+    i = 0
+    if not already_native_summary and report["summary"]:
+        report["summary"] = translated[i]
+        i += 1
+    report["title"] = translated[i]
+    i += 1
+    n = len(key_findings)
+    report["key_findings"] = translated[i:i + n]
+    i += n
+    n = len(supporting_evidence)
+    report["supporting_evidence"] = translated[i:i + n]
+    i += n
+    n = len(recommendations)
+    report["recommendations"] = translated[i:i + n]
+    i += n
+    n = len(timeline_labels)
+    for entry, new_label in zip(report["timeline"], translated[i:i + n]):
+        entry["label"] = new_label
+
+    return report

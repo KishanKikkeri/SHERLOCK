@@ -73,6 +73,8 @@ from collections import Counter, defaultdict
 
 from sqlalchemy import func
 
+from backend.language.context import resolve_language
+from backend.language.prompting import language_directive, localize_template_fallback
 from backend.database.models import (
     Person, Accused, Victim, FIR, Crime, Location,
     PersonAssociation, Organization, OrganizationMembership,
@@ -159,21 +161,30 @@ class SociologicalInsightsService:
             "data_availability": self._data_availability(),
         }
 
-    def build_report(self, accused_person_ids: list[int] | None = None, query: str | None = None) -> dict:
+    def build_report(self, accused_person_ids: list[int] | None = None, query: str | None = None,
+                      language: str | None = None) -> dict:
         """The Sociological Report Generator: Executive Summary -> Key
         Findings -> Risk Factors -> Evidence -> Recommendations ->
         Confidence -> Supporting Data. Everything but the executive
         summary's prose is composed directly from `build_dashboard()`'s
         numbers; the LLM (when available) is only asked to phrase the
-        summary, never to add facts. See _executive_summary()."""
+        summary, never to add facts. See _executive_summary().
+
+        `language` (Priority 26/27, optional): explicit override for the
+        executive summary's output language. Omitted resolves via
+        `resolve_language()` — the global language context set from the
+        frontend's `X-App-Language` header — since this dashboard has no
+        per-turn language argument of its own the way a conversation
+        turn does."""
         dashboard = self.build_dashboard(accused_person_ids)
+        effective_language = resolve_language(language)
 
         key_findings = self._key_findings(dashboard)
         risk_factors = self._risk_factor_summaries(dashboard)
         evidence = self._evidence_trail(dashboard)
         recommendations = self._recommendations(dashboard)
         confidence = self._confidence(dashboard)
-        executive_summary = self._executive_summary(dashboard, key_findings, query)
+        executive_summary = self._executive_summary(dashboard, key_findings, query, effective_language)
 
         return {
             "executive_summary": executive_summary,
@@ -521,24 +532,27 @@ class SociologicalInsightsService:
             ),
         }
 
-    def _executive_summary(self, dashboard: dict, key_findings: list[str], query: str | None) -> str:
+    def _executive_summary(self, dashboard: dict, key_findings: list[str], query: str | None,
+                            language: str = "en") -> str:
         if not key_findings:
-            return "No sociological findings were available for this scope."
+            return localize_template_fallback("No sociological findings were available for this scope.", language)
 
         if os.getenv("ANTHROPIC_API_KEY"):
             try:
-                return self._executive_summary_llm(dashboard, key_findings, query)
+                return self._executive_summary_llm(dashboard, key_findings, query, language)
             except Exception:
                 logger.warning("LLM executive summary failed, falling back to template", exc_info=True)
-                return self._executive_summary_template(key_findings) + \
+                template = self._executive_summary_template(key_findings) + \
                     "\n\n(Note: AI-written summary was unavailable; the summary above is composed directly from computed findings.)"
+                return localize_template_fallback(template, language)
 
-        return self._executive_summary_template(key_findings)
+        return localize_template_fallback(self._executive_summary_template(key_findings), language)
 
     def _executive_summary_template(self, key_findings: list[str]) -> str:
         return " ".join(key_findings)
 
-    def _executive_summary_llm(self, dashboard: dict, key_findings: list[str], query: str | None) -> str:
+    def _executive_summary_llm(self, dashboard: dict, key_findings: list[str], query: str | None,
+                                language: str = "en") -> str:
         from anthropic import Anthropic
 
         client = Anthropic()
@@ -548,7 +562,8 @@ class SociologicalInsightsService:
             "intelligence platform. Write a short (3-5 sentence), professional executive "
             "summary based ONLY on the computed findings below. Do not invent any fact, "
             "number, or dimension not present in the findings. Where a finding says a "
-            "dimension is unavailable, state that plainly rather than speculating about it.\n\n"
+            "dimension is unavailable, state that plainly rather than speculating about it."
+            + language_directive(language) + "\n\n"
             + (f"Context: {query}\n\n" if query else "")
             + f"Computed findings:\n{findings_text}"
         )

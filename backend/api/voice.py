@@ -56,8 +56,11 @@ class VoiceCommandRequest(BaseModel):
 async def voice_command(body: VoiceCommandRequest, ctx=Depends(RequirePermission(USE_VOICE))):
     session = SessionLocal()
     try:
+        from backend.language.context import resolve_language
+
         cmd_router = VoiceCommandRouter(session)
-        result = await cmd_router.route(body.transcript, session_id=body.session_id)
+        result = await cmd_router.route(body.transcript, session_id=body.session_id,
+                                         language=resolve_language(None))
         from backend.security import audit as security_audit
         from backend.database.models import AuditAction
         security_audit.record(

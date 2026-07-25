@@ -188,12 +188,13 @@ def build_investigation_graph(session, graph_service):
     return builder.compile()
 
 
-def run_investigation(query: str, session, graph_service, conversation_id: str = "demo"):
+def run_investigation(query: str, session, graph_service, conversation_id: str = "demo", language: str = "en"):
     """Convenience entry point: build the graph, run it for `query`, return final state."""
     graph = build_investigation_graph(session, graph_service)
     initial_state = {
         "query": query,
         "conversation_id": conversation_id,
+        "language": language,
         "investigation_plan": {},
         "active_agents": [],
         "findings": [],

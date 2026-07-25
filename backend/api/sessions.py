@@ -9,6 +9,7 @@ Endpoints:
     GET    /sessions                      List sessions (optionally filter by status/owner)
     GET    /sessions/{id}                 Get one session
     PATCH  /sessions/{id}                 Update metadata (title/priority/notes)
+    PATCH  /sessions/{id}/case            Set/clear the case (fir_id) this session is scoped to
     POST   /sessions/{id}/close           Close
     POST   /sessions/{id}/reopen          Reopen
     POST   /sessions/{id}/archive         Archive (terminal)
@@ -47,6 +48,11 @@ class UpdateSessionRequest(BaseModel):
     title: str | None = None
     priority: str | None = None
     notes: str | None = None
+    actor_officer_id: int | None = None
+
+
+class SetCaseRequest(BaseModel):
+    fir_id: int | None = None  # None = "All Cases" (clear case scope)
     actor_officer_id: int | None = None
 
 
@@ -177,6 +183,31 @@ def update_session(session_id: int, body: UpdateSessionRequest, _ctx=Depends(Req
     except Exception:
         logger.exception("PATCH /sessions/%s failed", session_id)
         raise HTTPException(status_code=500, detail="Failed to update session.")
+    finally:
+        session.close()
+
+
+@router.patch("/{session_id}/case")
+def set_session_case(session_id: int, body: SetCaseRequest, _ctx=Depends(RequirePermission(MANAGE_CASE))):
+    """Priority 5 (case scoping): bind this conversation session to a case
+    (fir_id), or pass fir_id=null for "All Cases". Every subsequent turn on
+    this session — SQL, graph, analytics, forecasting, financial, etc. —
+    is scoped to it (see stream_investigation in investigation_stream.py)."""
+    session = SessionLocal()
+    try:
+        svc = DatabaseService(session)
+        try:
+            row = svc.update_session_case(session_id, body.fir_id, actor_officer_id=body.actor_officer_id)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        if row is None:
+            raise HTTPException(status_code=404, detail="Session not found.")
+        return _serialize(row)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("PATCH /sessions/%s/case failed", session_id)
+        raise HTTPException(status_code=500, detail="Failed to update session case.")
     finally:
         session.close()
 

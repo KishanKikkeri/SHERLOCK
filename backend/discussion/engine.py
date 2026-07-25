@@ -47,6 +47,8 @@ import os
 import re
 from dataclasses import dataclass, field, asdict
 
+from backend.language.prompting import language_directive, localize_template_fallback
+
 logger = logging.getLogger(__name__)
 
 DISAGREEMENT_SPREAD_THRESHOLD = 0.35   # confidence spread that counts as "agents disagree"
@@ -92,10 +94,18 @@ class DiscussionEngine:
     """Runs over one turn's validated findings. `session` is an optional
     SQLAlchemy session, used only to resolve entity id -> display label
     (same lookup conversation_memory.py uses); pass None to skip labeling
-    (labels fall back to "kind #id")."""
+    (labels fall back to "kind #id").
 
-    def __init__(self, session=None):
+    `language` (Priority 27/29, default "en"): the active output
+    language for this turn's disagreement explanations —
+    `_explain_disagreement` generates directly in this language via
+    `language_directive()` on the LLM path, and localizes the
+    deterministic template on the no-LLM-key path. Omitted keeps the
+    pre-Priority-26 English-only behavior."""
+
+    def __init__(self, session=None, language: str = "en"):
         self.session = session
+        self.language = language or "en"
 
     # -- step 1: agent opinions -------------------------------------------
 
@@ -215,10 +225,11 @@ class DiscussionEngine:
     def _explain_disagreement(self, entity_label: str, representative: list[AgentOpinion]) -> str:
         if os.getenv("ANTHROPIC_API_KEY"):
             try:
-                return self._explain_disagreement_llm(entity_label, representative)
+                return self._explain_disagreement_llm(entity_label, representative, self.language)
             except Exception:
                 logger.warning("LLM disagreement explanation failed, falling back to template", exc_info=True)
-        return self._explain_disagreement_template(entity_label, representative)
+        template = self._explain_disagreement_template(entity_label, representative)
+        return localize_template_fallback(template, self.language)
 
     def _explain_disagreement_template(self, entity_label: str, representative: list[AgentOpinion]) -> str:
         ordered = sorted(representative, key=lambda o: -o.confidence)
@@ -226,7 +237,8 @@ class DiscussionEngine:
         return f"Regarding {entity_label} — " + " However, ".join(parts) + \
             " Therefore this entity needs review before being treated as settled."
 
-    def _explain_disagreement_llm(self, entity_label: str, representative: list[AgentOpinion]) -> str:
+    def _explain_disagreement_llm(self, entity_label: str, representative: list[AgentOpinion],
+                                    language: str = "en") -> str:
         from anthropic import Anthropic
 
         client = Anthropic()
@@ -241,7 +253,9 @@ class DiscussionEngine:
             f"investigation. State plainly what each agent concluded and why the "
             f"confidence differs, in 2-3 sentences, in the style: '<Agent> suggests X. "
             f"<Agent> disagrees because Y. Therefore...'. Only use the facts given below "
-            f"— do not invent evidence, names, or numbers not present here.\n\n{positions}"
+            f"— do not invent evidence, names, or numbers not present here."
+            + language_directive(language) +
+            f"\n\n{positions}"
         )
         response = client.messages.create(
             model="claude-sonnet-4-6",

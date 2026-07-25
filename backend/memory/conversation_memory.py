@@ -42,6 +42,8 @@ import os
 import re
 from dataclasses import dataclass, field
 
+from backend.language.context import resolve_language
+from backend.language.prompting import language_directive, localize_template_fallback
 from backend.database.models import (
     ConversationTurn, InvestigationSession, Person, FIR, BankAccount,
     Organization, Property, Weapon,
@@ -495,12 +497,18 @@ class ConversationMemoryService:
         self.session.commit()
 
     def _summarize_turns(self, turns: list[ConversationTurn], prior_summary: str | None) -> str:
+        # Priority 26/31: no per-turn `language` argument reaches this far
+        # (record_turn/maybe_summarize predate the global language
+        # context and would need a wider signature change to carry one
+        # through) — resolves from the ambient global context instead,
+        # same as backend/intelligence/sociological_insights.py.
+        language = resolve_language(None)
         if os.getenv("ANTHROPIC_API_KEY"):
             try:
-                return self._summarize_turns_llm(turns, prior_summary)
+                return self._summarize_turns_llm(turns, prior_summary, language)
             except Exception:
                 logger.warning("LLM conversation summarization failed, falling back to template", exc_info=True)
-        return self._summarize_turns_template(turns, prior_summary)
+        return localize_template_fallback(self._summarize_turns_template(turns, prior_summary), language)
 
     def _summarize_turns_template(self, turns: list[ConversationTurn], prior_summary: str | None) -> str:
         lines = [prior_summary] if prior_summary else []
@@ -511,7 +519,8 @@ class ConversationMemoryService:
             lines.append(bullet)
         return "\n".join(l for l in lines if l)
 
-    def _summarize_turns_llm(self, turns: list[ConversationTurn], prior_summary: str | None) -> str:
+    def _summarize_turns_llm(self, turns: list[ConversationTurn], prior_summary: str | None,
+                              language: str = "en") -> str:
         from anthropic import Anthropic
 
         client = Anthropic()
@@ -527,8 +536,9 @@ class ConversationMemoryService:
             "space in future prompts. Summarize the turns below into a short "
             "list of the concrete entities, findings, and open threads "
             "raised — not a narrative. Merge with the prior summary if given. "
-            "Do not invent facts not present in the turns.\n\n"
-            f"{prior}Turns to fold in:\n{transcript}"
+            "Do not invent facts not present in the turns."
+            + language_directive(language) +
+            f"\n\n{prior}Turns to fold in:\n{transcript}"
         )
         response = client.messages.create(
             model="claude-sonnet-4-6",

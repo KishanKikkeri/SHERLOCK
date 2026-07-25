@@ -33,6 +33,7 @@ from pydantic import BaseModel
 from backend.conversation.manager import ConversationManager
 from backend.database.config import SessionLocal
 from backend.database.models import AuditAction
+from backend.database.service import DatabaseService
 from backend.memory.conversation_memory import ConversationMemoryService
 from backend.security import audit as security_audit
 from backend.security.dependencies import AuthContext
@@ -107,6 +108,36 @@ async def post_stream(payload: MessageRequest, ctx: AuthContext = Depends(Requir
 
 
 # ---------------------------------------------------------------------------
+# GET /conversation/cases — case-selector list (Priority 5)
+# ---------------------------------------------------------------------------
+
+@router.get("/cases")
+def list_cases(search: str | None = None, limit: int = 50, _ctx=Depends(RequirePermission(VIEW_CASE))):
+    """Backs the Conversation page's case selector (Priority 5). Actual
+    scoping happens via PATCH /sessions/{id}/case — this is read-only."""
+    db = SessionLocal()
+    try:
+        svc = DatabaseService(db)
+        firs = svc.list_cases(search=search, limit=min(limit, 200))
+        return [
+            {
+                "fir_id": f.id,
+                "fir_number": f.fir_number,
+                "status": f.status.value,
+                "crime_type": f.crime.type.value if f.crime else None,
+                "district": f.crime.location.district if f.crime and f.crime.location else None,
+                "filed_date": f.filed_date.isoformat() if f.filed_date else None,
+            }
+            for f in firs
+        ]
+    except Exception:
+        logger.exception("GET /conversation/cases failed")
+        raise HTTPException(status_code=500, detail="Failed to list cases.")
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
 # GET /conversation/{session_id}/history — chat-shaped turn history
 # ---------------------------------------------------------------------------
 
@@ -166,8 +197,16 @@ def post_summarize(session_id: int, _ctx=Depends(RequirePermission(VIEW_CASE))):
 # ---------------------------------------------------------------------------
 
 @router.post("/{session_id}/export/pdf")
-def post_export_pdf(session_id: int, language: str = "en", request: Request = None,
+def post_export_pdf(session_id: int, language: str | None = None, request: Request = None,
                      ctx: AuthContext = Depends(RequirePermission(EXPORT_PDF))):
+    # Priority 26/30: the frontend already passes its current UI language
+    # explicitly here (see frontend/src/lib/queries/conversation.ts), but a
+    # direct API caller that omits it now gets the global language context
+    # instead of a hardcoded "en" default that would silently ignore an
+    # active Kannada session.
+    if language is None:
+        from backend.language.context import resolve_language
+        language = resolve_language(None)
     if language not in ("en", "kn", "bilingual"):
         raise HTTPException(status_code=422, detail="language must be one of 'en', 'kn', 'bilingual'.")
 

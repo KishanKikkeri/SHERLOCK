@@ -25,6 +25,15 @@ class SherlockState(TypedDict, total=False):
     raw_query: str              # the query as typed/spoken, before reference resolution
     resolved_query: str         # query after Stage C2 pronoun/reference resolution
 
+    # Priority 26/33 — the active output language ("en" / "kn") for this
+    # investigation, resolved once in backend/api/investigation_stream.py
+    # (explicit argument, else the global language context, else detected
+    # from the query text) and read by ChiefAgent.synthesis_node so the
+    # narrative is generated directly in that language. Omitted keeps
+    # every existing caller (demo scripts, `run_investigation`) on the
+    # pre-Priority-26 English-only default.
+    language: str
+
     investigation_plan: dict          # set once by Chief (plan step)
     active_agents: list                # list[str] — which specialists to run
 

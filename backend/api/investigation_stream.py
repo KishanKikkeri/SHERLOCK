@@ -21,6 +21,7 @@ from backend.graph.service import get_graph_service
 from backend.memory.conversation_memory import ConversationMemoryService
 from backend.orchestrator.graph import build_investigation_graph
 from backend.language import TranslationService, detect_language, SUPPORTED_LANGUAGES
+from backend.language.context import get_current_language
 
 logger = logging.getLogger(__name__)
 
@@ -97,16 +98,35 @@ def _localize_report(final_report: dict, target_language: str, translator: Trans
     verbatim (not re-translated — it's already in the target language)
     so Sprint D4's PDF export can show "what the officer actually asked"
     instead of only the English text the pipeline worked from.
+
+    Priority 27/29 update: `ChiefAgent.synthesis_node` now generates the
+    narrative directly in `target_language` when that language is active
+    (see backend/agents/chief/agent.py) and records that fact in
+    `final_report["narrative_language"]`. Re-translating an already-
+    Kannada narrative through the EN->KN translator would garble it, so
+    the narrative is only batch-translated here when it's still in a
+    different language than requested (e.g. the LLM path was
+    unavailable and the template fallback's own localization — see
+    `localize_template_fallback` — didn't already handle it for some
+    reason). Finding summaries are untouched by this change: they're
+    still deterministic English f-strings from the specialist agents,
+    not LLM output, so they continue to go through the translator here.
     """
     narrative = final_report.get("narrative") or ""
+    narrative_already_localized = final_report.get("narrative_language") == target_language
     findings = final_report.get("findings") or []
     summaries = [f.get("summary", "") for f in findings]
 
-    texts = [narrative] + summaries
-    results = translator.batch_translate(texts, target_language=target_language, source_language="en")
+    texts_to_translate = summaries if narrative_already_localized else [narrative] + summaries
+    results = translator.batch_translate(texts_to_translate, target_language=target_language, source_language="en") \
+        if texts_to_translate else []
 
-    localized_narrative = results[0].text if results else narrative
-    localized_summaries = [r.text for r in results[1:]]
+    if narrative_already_localized:
+        localized_narrative = narrative
+        localized_summaries = [r.text for r in results]
+    else:
+        localized_narrative = results[0].text if results else narrative
+        localized_summaries = [r.text for r in results[1:]]
     warnings = [w for r in results for w in r.warnings]
 
     localized_findings = []
@@ -163,25 +183,44 @@ async def stream_investigation(query: str, send, session_id: int | None = None,
     parallel, additive step rather than inserted into the frozen graph.
 
     `language` (Stage D, Sprint 2, optional): the person's language for
-    this turn — "en" or "kn". If omitted, it's auto-detected from `query`
-    itself (per the Sprint D1 requirement to not depend solely on an
-    explicit parameter), so Kannada queries are translated even when a
-    caller forgets to pass it. If a non-English language is in effect
-    (explicit or detected), the query is translated to English *before*
-    conversation-memory resolution and the pipeline ever see it — nothing
-    downstream of this point knows translation happened, per the Stage D
-    architecture ("Translation Layer -> Chief -> ... -> Localization
-    Layer"). Every event this call emits from here on is additionally
+    this turn — "en" or "kn". Resolution order (Priority 26 update):
+    (1) this explicit argument, if given and supported; (2) the global
+    language context set by `LanguageContextMiddleware` from the
+    frontend's `X-App-Language` header — the deliberate, app-wide
+    language selection this priority introduces; (3) auto-detected from
+    `query` itself, same as before Priority 26 — kept as the last resort
+    so callers that predate the global context (demo scripts, tests,
+    anything not going through a real HTTP request) still get Sprint
+    D1's "the query speaks for itself" behavior instead of silently
+    losing Kannada-detection entirely. If a non-English language is in
+    effect, the query is translated to English *before*
+    conversation-memory resolution and the pipeline ever sees it —
+    nothing downstream of this point knows translation happened, per the
+    Stage D architecture ("Translation Layer -> Chief -> ... ->
+    Localization Layer") — EXCEPT the Chief's own narrative synthesis,
+    which now receives `effective_language` directly via
+    `SherlockState["language"]` and generates its narrative natively in
+    that language (Priority 27/29) instead of only being translated
+    afterward. Every event this call emits from here on is additionally
     localized (see `_make_localizing_sender`); `final_report` gets a
-    parallel `localized` block. Omitting `language` and passing an
-    English query behaves exactly as before this sprint — no translation
-    call is made at all.
+    parallel `localized` block. Omitting `language`, having no
+    `X-App-Language` header in effect, and passing an English query
+    behaves exactly as before Priority 26 — no translation call is made
+    at all.
     """
     translator = TranslationService()
     detection = detect_language(query)
-    effective_language = language or detection.language
+    context_language = get_current_language()
+    effective_language = language or context_language
     if effective_language not in SUPPORTED_LANGUAGES:
         effective_language = "en"
+    if effective_language == "en" and not language and context_language == "en" and \
+            detection.language in SUPPORTED_LANGUAGES and detection.language != "en":
+        # No explicit language and no global context override in effect —
+        # fall back to detecting from the query itself (pre-Priority-26
+        # behavior), so a Kannada-typed query still gets a Kannada answer
+        # even from a caller that never set the header/argument.
+        effective_language = detection.language
 
     original_query = query
     if effective_language != "en":
@@ -269,6 +308,7 @@ async def stream_investigation(query: str, send, session_id: int | None = None,
             "resolved_query": resolved_query,
             "conversation_id": "live",
             "session_id": session_id,
+            "language": effective_language,
             "investigation_plan": {},
             "active_agents": [],
             "findings": [],
@@ -339,7 +379,8 @@ async def stream_investigation(query: str, send, session_id: int | None = None,
 
             if enable_discussion:
                 turn_index = recorded_turn.turn_index if recorded_turn is not None else None
-                await run_discussion(send, session, session_id, turn_index, resolved_query, combined_report)
+                await run_discussion(send, session, session_id, turn_index, resolved_query, combined_report,
+                                      language=effective_language)
 
     except Exception as e:
         logger.exception("Investigation pipeline failed for query: %r", query)
@@ -348,19 +389,24 @@ async def stream_investigation(query: str, send, session_id: int | None = None,
         session.close()
 
 
-async def run_discussion(send, session, session_id, turn_index, query: str, final_report: dict):
+async def run_discussion(send, session, session_id, turn_index, query: str, final_report: dict,
+                          language: str = "en"):
     """Stage C4, Sprint 3: run DiscussionEngine over this turn's validated
     findings, streaming each step and persisting the result as one
     DiscussionRecord row. Isolated in its own try/except so a discussion
     failure (e.g. the LLM call erroring) never takes down an otherwise-
     successful investigation — the report the person came for has
-    already been sent by the time this runs."""
+    already been sent by the time this runs.
+
+    `language` (Priority 27/29): forwarded to `DiscussionEngine` so its
+    disagreement explanations are generated directly in the active
+    language rather than only in English."""
     try:
         await send(make_event(EventType.DISCUSSION_STARTED, agent="Discussion Engine",
                                message="Reviewing specialist findings for agreement/disagreement..."))
 
         findings = final_report.get("findings") or []
-        engine = DiscussionEngine(session=session)
+        engine = DiscussionEngine(session=session, language=language)
         opinions = engine.build_opinions(findings)
         disagreements = engine.detect_disagreements(opinions)
         consensus = engine.compute_consensus(opinions, disagreements)

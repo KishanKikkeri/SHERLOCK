@@ -45,8 +45,15 @@ class VoiceQueryResult:
     detected_language: str             # "en" | "kn" | "mixed" | "unknown"
     working_transcript: str            # transcript translated to English (== transcript if already English)
     intent: str                        # from VoiceCommandRouter
-    spoken_response_en: str            # router's canonical English response
-    spoken_response: str               # localized response, in detected_language
+    spoken_response_en: str            # router's own response, verbatim. Despite the name (kept for
+                                        # backward compatibility with existing callers), this is only
+                                        # actually English when the router had no native-language path
+                                        # for this intent (Priority 32: `investigate`/`generate_report`
+                                        # now generate directly in `detected_language` via ChiefAgent —
+                                        # see VoiceCommandResult.language — so for those two intents this
+                                        # field is already in `detected_language`, identical to
+                                        # `spoken_response` below, and no separate English draft exists.
+    spoken_response: str                # localized response, in detected_language
     session_id: int | None
     data: dict = field(default_factory=dict)
     audio: SynthesisResult | None = None
@@ -121,11 +128,23 @@ class VoiceService:
             working_transcript = translation.text
             warnings.extend(translation.warnings)
 
-        cmd_result = await self.command_router.route(working_transcript, session_id=session_id)
+        # Priority 32: pass the detected language through so an
+        # `investigate`/`generate_report` intent (the two that run a
+        # real investigation) generates its narrative natively in that
+        # language via ChiefAgent (Priority 27/29), instead of the
+        # router always answering in English and this method being the
+        # only thing that ever localizes it.
+        cmd_result = await self.command_router.route(working_transcript, session_id=session_id,
+                                                       language=effective_language)
 
         spoken_response_en = cmd_result.spoken_response
         spoken_response = spoken_response_en
-        if effective_language != "en":
+        if effective_language != "en" and cmd_result.language != effective_language:
+            # Only translate here if the router's own response isn't
+            # already in the target language — re-translating an
+            # already-Kannada investigation narrative through the
+            # EN->KN translator would garble it (same reasoning as
+            # `_localize_report` in backend/api/investigation_stream.py).
             response_translation = self.translator.translate(
                 spoken_response_en, target_language=effective_language, source_language="en")
             spoken_response = response_translation.text

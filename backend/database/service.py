@@ -274,6 +274,37 @@ class DatabaseService:
         self.session.refresh(row)
         return row
 
+    def update_session_case(self, session_id: int, fir_id: int | None,
+                             actor_officer_id: int | None = None) -> InvestigationSession | None:
+        """Priority 5 (case scoping): (re)bind a conversation session to a
+        case (a FIR — FIR<->Crime is 1:1), or clear it back to "All Cases"
+        with fir_id=None. This is the one write path that changes what
+        every agent's queries are scoped to for this session (see
+        `backend.api.investigation_stream.stream_investigation`, which reads
+        `InvestigationSession.fir_id` fresh on every turn)."""
+        row = self.get_session(session_id)
+        if row is None:
+            return None
+        if fir_id is not None and self.get_fir(fir_id) is None:
+            raise ValueError(f"FIR/case {fir_id} does not exist.")
+        row.fir_id = fir_id
+        detail = f"Case scope set to FIR #{fir_id}" if fir_id is not None else "Case scope cleared (All Cases)"
+        self._log_activity(row, "case_changed", actor_officer_id, detail=detail)
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def list_cases(self, search: str | None = None, limit: int = 50) -> list[FIR]:
+        """Priority 5/7: cases for the Conversation page's case selector.
+        Joins in Crime for type/timestamp so the dropdown can show
+        something more useful than a bare FIR number. `search` matches
+        against fir_number (case-insensitive substring) — good enough for
+        a selector list; not a full search feature."""
+        query = self.session.query(FIR).join(Crime, FIR.crime_id == Crime.id)
+        if search:
+            query = query.filter(FIR.fir_number.ilike(f"%{search}%"))
+        return query.order_by(FIR.filed_date.desc()).limit(limit).all()
+
     def assign_investigator(self, session_id: int, officer_id: int, role: str = "investigator",
                              actor_officer_id: int | None = None) -> SessionAssignment | None:
         session_row = self.get_session(session_id)

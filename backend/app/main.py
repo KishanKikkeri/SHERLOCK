@@ -43,7 +43,9 @@ from backend.api.offender_profile import router as offender_profile_router
 from backend.api.analytics import router as analytics_router
 from backend.api.forecast import router as forecast_router
 from backend.api.sociological import router as sociological_router
+from backend.api.graph_search import router as graph_search_router
 from backend.security.config import AUTH_ENABLED
+from backend.language.context import LanguageContextMiddleware
 from backend.security.seed import run_all_seeds
 from backend.security.permissions import RequirePermission, VIEW_CASE, RUN_INVESTIGATION, EXPORT_PDF
 from backend.security import audit as security_audit
@@ -58,7 +60,7 @@ from backend.database.models import AuditAction
 from backend.database.config import SessionLocal
 from backend.database.models import Person, Crime, FIR, BankAccount, Transaction
 from backend.graph.service import get_graph_service
-from backend.graph.schema import node_key
+from backend.graph.schema import node_key, NODE_LABELS
 from backend.logging_config import configure_logging
 from backend.reporting.pdf_export import generate_investigation_pdf, pdf_export_warnings
 
@@ -81,6 +83,15 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # inside it (so its timing measurement wraps the actual route handler).
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestContextMiddleware)
+
+# Priority 26 — Global Language Context. Reads `X-App-Language` (sent by
+# the frontend on every request, see frontend/src/lib/api-client.ts) into
+# a ContextVar so every AI-generating service can resolve the active
+# language via `backend.language.resolve_language()` without an explicit
+# parameter threaded through its whole call stack. Order doesn't matter
+# relative to the two middlewares above (no shared state), so it's added
+# right alongside them.
+app.add_middleware(LanguageContextMiddleware)
 
 # Stage E6 — trusted hosts. Comma-separated env var; "*" (default) skips
 # the restriction entirely rather than adding a middleware that allows
@@ -131,6 +142,10 @@ app.include_router(forecast_router)
 # Sociological Crime Insights dashboard, platform-wide (not session-scoped)
 # — new, additive.
 app.include_router(sociological_router)
+
+# Priority 18-23 (Conversation, Voice & Graph Search Refactor) — new,
+# additive. GET /graph/search — see backend/graph/search.py.
+app.include_router(graph_search_router)
 
 # Stage D (Language Intelligence) — new, additive
 app.include_router(language_router)
@@ -217,6 +232,68 @@ def metrics():
 # Subgraph for the investigation vis panel
 # ---------------------------------------------------------------------------
 
+def _build_ego_subgraph(session, ctx, node_type: str, entity_id, hops: int):
+    """Shared BFS ego-graph builder behind both /graph/{person_id} (legacy,
+    Person-only) and /graph/node/{node_type}/{entity_id} (Priority 21 —
+    center-and-navigate from a graph search result of *any* entity type).
+    Identical masking/visibility behavior in both callers."""
+    graph_service = get_graph_service(backend="networkx", session=session)
+    G = graph_service.G  # NetworkX graph directly
+
+    center = node_key(node_type, entity_id)
+    if center not in G:
+        return {"nodes": [], "edges": []}
+
+    # BFS up to `hops` hops (undirected)
+    UG = G.to_undirected()
+    visited = {center}
+    frontier = {center}
+    for _ in range(hops):
+        next_frontier = set()
+        for n in frontier:
+            for nb in UG.neighbors(n):
+                if nb not in visited:
+                    visited.add(nb)
+                    next_frontier.add(nb)
+        frontier = next_frontier
+
+    nodes = []
+    visibility = masking.visibility_for(ctx)
+    for n in visited:
+        data = G.nodes[n]
+        n_type = data.get("label", "Unknown")
+        node_data = {k: v for k, v in data.items() if k != "label"}
+        node_data = masking.mask_graph_node_data(n_type, node_data, visibility)
+        label_val = (
+            node_data.get("name") or node_data.get("fir_number") or node_data.get("number")
+            or node_data.get("account_number") or node_data.get("registration_number")
+            or n
+        )
+        nodes.append({
+            "id": n,
+            "label": label_val,
+            "type": n_type,
+            "data": node_data,
+        })
+
+    edges = []
+    seen_edges = set()
+    for u, v, data in G.edges(visited, data=True):
+        if v not in visited:
+            continue
+        key = (min(u, v), max(u, v), data.get("type", ""))
+        if key in seen_edges:
+            continue
+        seen_edges.add(key)
+        edges.append({
+            "source": u,
+            "target": v,
+            "type": data.get("type", "UNKNOWN"),
+        })
+
+    return {"nodes": nodes, "edges": edges, "center": center}
+
+
 @app.get("/graph/{person_id}")
 def get_person_subgraph(person_id: int, hops: int = 1, ctx=Depends(RequirePermission(VIEW_CASE))):
     """
@@ -230,71 +307,48 @@ def get_person_subgraph(person_id: int, hops: int = 1, ctx=Depends(RequirePermis
     this only affects what's serialized into the response. With
     SHERLOCK_AUTH_ENABLED=false (default), visibility is always FULL —
     identical to pre-Stage-E4 behavior.
+
+    Kept as the Person-specific legacy route so no existing caller
+    breaks; equivalent to GET /graph/node/Person/{person_id}, which
+    also supports every other node type (Priority 21).
     """
     if not (1 <= hops <= MAX_GRAPH_HOPS):
         raise HTTPException(status_code=422, detail=f"hops must be between 1 and {MAX_GRAPH_HOPS}.")
 
     session = SessionLocal()
     try:
-        graph_service = get_graph_service(backend="networkx", session=session)
-        G = graph_service.G  # NetworkX graph directly
-
-        center = node_key("Person", person_id)
-        if center not in G:
-            return {"nodes": [], "edges": []}
-
-        # BFS up to `hops` hops (undirected)
-        UG = G.to_undirected()
-        visited = {center}
-        frontier = {center}
-        for _ in range(hops):
-            next_frontier = set()
-            for n in frontier:
-                for nb in UG.neighbors(n):
-                    if nb not in visited:
-                        visited.add(nb)
-                        next_frontier.add(nb)
-            frontier = next_frontier
-
-        nodes = []
-        visibility = masking.visibility_for(ctx)
-        for n in visited:
-            data = G.nodes[n]
-            node_type = data.get("label", "Unknown")
-            node_data = {k: v for k, v in data.items() if k != "label"}
-            node_data = masking.mask_graph_node_data(node_type, node_data, visibility)
-            label_val = (
-                node_data.get("name") or node_data.get("fir_number") or node_data.get("number")
-                or node_data.get("account_number") or node_data.get("registration_number")
-                or n
-            )
-            nodes.append({
-                "id": n,
-                "label": label_val,
-                "type": node_type,
-                "data": node_data,
-            })
-
-        edges = []
-        seen_edges = set()
-        for u, v, data in G.edges(visited, data=True):
-            if v not in visited:
-                continue
-            key = (min(u, v), max(u, v), data.get("type", ""))
-            if key in seen_edges:
-                continue
-            seen_edges.add(key)
-            edges.append({
-                "source": u,
-                "target": v,
-                "type": data.get("type", "UNKNOWN"),
-            })
-
-        return {"nodes": nodes, "edges": edges, "center": center}
+        return _build_ego_subgraph(session, ctx, "Person", person_id, hops)
     except HTTPException:
         raise
     except Exception:
         logger.exception("GET /graph/%s failed", person_id)
+        raise HTTPException(status_code=500, detail="Failed to build subgraph.")
+    finally:
+        session.close()
+
+
+@app.get("/graph/node/{node_type}/{entity_id}")
+def get_entity_subgraph(node_type: str, entity_id: int, hops: int = 1,
+                         ctx=Depends(RequirePermission(VIEW_CASE))):
+    """
+    Priority 21 — Graph Navigation. Generalizes `/graph/{person_id}` to
+    every node label in the schema, so selecting *any* graph-search
+    result (a vehicle, a FIR, an organization, a location, ...) can
+    center-and-expand the graph the same way a Person result always
+    could. Same BFS, masking, and response shape as the legacy route.
+    """
+    if node_type not in NODE_LABELS:
+        raise HTTPException(status_code=422, detail=f"Unknown node type {node_type!r}. Expected one of: {NODE_LABELS}.")
+    if not (1 <= hops <= MAX_GRAPH_HOPS):
+        raise HTTPException(status_code=422, detail=f"hops must be between 1 and {MAX_GRAPH_HOPS}.")
+
+    session = SessionLocal()
+    try:
+        return _build_ego_subgraph(session, ctx, node_type, entity_id, hops)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("GET /graph/node/%s/%s failed", node_type, entity_id)
         raise HTTPException(status_code=500, detail="Failed to build subgraph.")
     finally:
         session.close()

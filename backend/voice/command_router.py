@@ -56,11 +56,18 @@ def _truncate(text: str, limit: int = _SPOKEN_TRUNCATE) -> str:
 
 class VoiceCommandResult:
     def __init__(self, intent: str, spoken_response: str, data: dict | None = None,
-                 session_id: int | None = None):
+                 session_id: int | None = None, language: str = "en"):
         self.intent = intent
         self.spoken_response = spoken_response
         self.data = data or {}
         self.session_id = session_id
+        # Priority 32: which language `spoken_response` is actually
+        # written in. Most intents are short deterministic English
+        # strings ("en" default); `_generate_report`/`_investigate` set
+        # this to whatever language the underlying investigation ran in
+        # (Priority 27/29), so `VoiceService` (backend/voice/voice_service.py)
+        # knows not to translate an already-native-language response.
+        self.language = language
 
     def to_dict(self) -> dict:
         return {
@@ -68,6 +75,7 @@ class VoiceCommandResult:
             "spoken_response": self.spoken_response,
             "session_id": self.session_id,
             "data": self.data,
+            "language": self.language,
         }
 
 
@@ -95,8 +103,16 @@ class VoiceCommandRouter:
     def __init__(self, db_session):
         self.session = db_session
         self.svc = DatabaseService(db_session)
+        self.language = "en"
 
-    async def route(self, transcript: str, session_id: int | None = None) -> VoiceCommandResult:
+    async def route(self, transcript: str, session_id: int | None = None, language: str = "en") -> VoiceCommandResult:
+        # Priority 32: stashed for the duration of this call so
+        # `_generate_report`/`_investigate` (the two intents that run a
+        # real investigation) can pass it to `ConversationManager`/
+        # `run_investigation_once` without every other intent handler in
+        # this class needing a `language` parameter it has no use for —
+        # one instance per request (see class docstring), so this is safe.
+        self.language = language if language in ("en", "kn") else "en"
         text = transcript.strip()
         if not text:
             return VoiceCommandResult("empty", "I didn't catch that — try again.", session_id=session_id)
@@ -232,11 +248,12 @@ class VoiceCommandRouter:
 
     async def _generate_report(self, session_id: int | None, text: str) -> VoiceCommandResult:
         query = "Generate a full investigation summary report for this case."
-        report = await run_investigation_once(query, session_id=session_id)
+        report = await run_investigation_once(query, session_id=session_id, language=self.language)
         narrative = report.get("narrative") or "Report generated."
         return VoiceCommandResult(
             "generate_report", _truncate(narrative),
             data={"final_report": report}, session_id=session_id,
+            language=report.get("narrative_language", self.language),
         )
 
     def _vehicle_owner(self, session_id: int | None) -> VoiceCommandResult:
@@ -265,16 +282,29 @@ class VoiceCommandRouter:
         return VoiceCommandResult("vehicle_owner", spoken, session_id=session_id)
 
     async def _investigate(self, session_id: int | None, text: str) -> VoiceCommandResult:
-        report = await run_investigation_once(text, session_id=session_id)
-        narrative = report.get("narrative") or "I didn't find anything on that."
-        executive_report = build_executive_report(report)
-        return VoiceCommandResult(
-            "investigate", _truncate(narrative),
+        # Priority 17 — same ConversationManager text uses, not a
+        # parallel call to run_investigation_once. Free-text voice input
+        # ("show all witnesses", "summarize this", "who is Ravi Kumar")
+        # now gets identical intent classification (investigate vs.
+        # summarize/clear-history/export) as the exact same words typed
+        # into the Conversation screen would, not just the investigation
+        # pipeline's default path.
+        from backend.conversation.manager import ConversationManager
+        manager = ConversationManager(self.session)
+        result = await manager.handle_message(session_id, text, language=self.language)
+        final_report = result.get("final_report")
+        narrative = result.get("reply") or "I didn't find anything on that."
+        response_language = (final_report or {}).get("narrative_language", self.language)
+        data = {"final_report": final_report} if final_report else {}
+        if final_report:
             # `final_report` is kept verbatim (all validated + rejected
             # findings, full narrative) for a "Show Agent Trace" view.
             # `executive_report` is the structured, ranked, counted
             # summary the Analytics cards render by default — see
             # backend/intelligence/executive_summary.py.
-            data={"final_report": report, "executive_report": executive_report},
-            session_id=session_id,
+            data["executive_report"] = build_executive_report(final_report, language=response_language)
+        return VoiceCommandResult(
+            result.get("intent", "investigate"), _truncate(narrative),
+            data=data, session_id=result.get("session_id", session_id),
+            language=response_language,
         )
