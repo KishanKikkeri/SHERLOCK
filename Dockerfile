@@ -18,6 +18,15 @@ FROM node:20-slim AS frontend-build
 
 WORKDIR /app/frontend
 
+# Same-origin by default: the backend serves this build and the API from
+# one process/port, so a relative base URL always resolves correctly
+# without per-environment configuration. This is what fixes the app
+# always landing on /login — without it, the built JS calls
+# http://localhost:8000 from the visitor's browser, which fails, and the
+# app treats any failed auth check as "not logged in".
+ARG VITE_API_URL=""
+ENV VITE_API_URL=$VITE_API_URL
+
 COPY frontend/package.json frontend/package-lock.json ./
 
 RUN npm ci
@@ -92,9 +101,11 @@ EXPOSE 8000
 # -----------------------------------------------------------------------------
 # Health Check
 # -----------------------------------------------------------------------------
+# Uses the same env var the app itself reads for its listen port, so this
+# still works whatever port Catalyst AppSail actually assigns at runtime.
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -fsS http://localhost:8000/health || exit 1
+    CMD curl -fsS http://localhost:${X_ZOHO_CATALYST_LISTEN_PORT:-8000}/health || exit 1
 
 
 # -----------------------------------------------------------------------------
