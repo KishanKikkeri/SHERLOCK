@@ -1,51 +1,59 @@
-import { useState, type FormEvent } from 'react'
-import { Search, X } from 'lucide-react'
-import type { RawGraphNode } from '@/lib/types'
+import { useEffect, useState } from 'react'
+import { Search, X, Loader2, TriangleAlert } from 'lucide-react'
+import type { GraphSearchResult } from '@/lib/types'
+import { useGraphSearch } from '@/lib/queries/graph'
 import { ENTITY_META, entityLabel } from './entity-meta'
 import { Input } from '@/components/ui/Input'
-import { Button } from '@/components/ui/Button'
 import { useLanguage } from '@/providers/LanguageProvider'
+import { cn } from '@/lib/cn'
 
+const DEBOUNCE_MS = 250
+
+/**
+ * Priority 18-23 — unified graph search. Accepts any natural identifier
+ * (name, alias, vehicle number, phone, bank account, weapon serial,
+ * FIR/crime number, org/gang name, address, location, district, state,
+ * or crime type) and lets the investigator navigate straight to it,
+ * without ever choosing an entity type themselves.
+ */
 export function GraphSearch({
-  nodes,
-  onSelectNode,
-  onCenterOnPerson,
+  caseId,
+  onSelectResult,
 }: {
-  nodes: RawGraphNode[]
-  onSelectNode: (node: RawGraphNode) => void
-  onCenterOnPerson: (personId: number) => void
+  /** Currently-selected case (Crime id), if any — boosts ranking for
+   * entities already connected to it (Priority 23). */
+  caseId?: number
+  onSelectResult: (result: GraphSearchResult) => void
 }) {
   const [query, setQuery] = useState('')
-  const [personIdInput, setPersonIdInput] = useState('')
+  const [debounced, setDebounced] = useState('')
   const { t } = useLanguage()
 
-  const results =
-    query.trim().length > 0
-      ? nodes
-          .filter((n) => n.label.toLowerCase().includes(query.trim().toLowerCase()))
-          .slice(0, 8)
-      : []
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(query), DEBOUNCE_MS)
+    return () => clearTimeout(id)
+  }, [query])
 
-  function handleCenterSubmit(e: FormEvent) {
-    e.preventDefault()
-    const id = Number(personIdInput)
-    if (Number.isInteger(id) && id > 0) {
-      onCenterOnPerson(id)
-      setPersonIdInput('')
-    }
-  }
+  const { data, isFetching, isError } = useGraphSearch(debounced, caseId)
+  const results = data?.results ?? []
 
   return (
     <div className="flex flex-col gap-3">
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
         <Input
-          placeholder={t('graph.search_placeholder', 'Search nodes in this graph…')}
+          placeholder={t(
+            'graph.search_placeholder',
+            'Search a name, vehicle, phone, FIR, org, location…',
+          )}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="pl-9"
-          aria-label="Search loaded graph nodes"
+          className="pl-9 pr-9"
+          aria-label="Search the crime intelligence graph"
         />
+        {isFetching && (
+          <Loader2 className="absolute right-9 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted" aria-hidden />
+        )}
         {query && (
           <button
             type="button"
@@ -58,45 +66,59 @@ export function GraphSearch({
         )}
       </div>
 
-      {results.length > 0 && (
-        <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
-          {results.map((n) => (
-            <li key={n.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  onSelectNode(n)
-                  setQuery('')
-                }}
-                className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-raised"
-              >
-                <span
-                  className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: `var(--${ENTITY_META[n.type].colorVar})` }}
-                  aria-hidden
-                />
-                <span className="truncate text-text">{n.label}</span>
-                <span className="ml-auto shrink-0 text-xs text-muted">{entityLabel(n.type, t)}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+      {isError && debounced && (
+        <p className="flex items-center gap-1.5 text-xs text-critical">
+          <TriangleAlert className="h-3.5 w-3.5" /> Search failed — try again.
+        </p>
       )}
 
-      <form onSubmit={handleCenterSubmit} className="flex items-end gap-2 border-t border-border pt-3">
-        <Input
-          label="Center on person ID"
-          helperText="No name search exists yet — see known limitations"
-          type="number"
-          min={1}
-          value={personIdInput}
-          onChange={(e) => setPersonIdInput(e.target.value)}
-          className="w-32"
-        />
-        <Button type="submit" variant="secondary" size="md">
-          Go
-        </Button>
-      </form>
+      {!isError && debounced && !isFetching && results.length === 0 && (
+        <p className="text-xs text-muted">No matches for "{debounced}".</p>
+      )}
+
+      {results.length > 0 && (
+        <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
+          {results.map((r) => {
+            const isCrimeType = r.type === 'CrimeType'
+            const meta = isCrimeType ? null : ENTITY_META[r.type as Exclude<typeof r.type, 'CrimeType'>]
+            const Icon = meta?.icon
+            return (
+              <li key={`${r.type}:${r.id}`}>
+                <button
+                  type="button"
+                  disabled={isCrimeType}
+                  onClick={() => {
+                    if (isCrimeType) return
+                    onSelectResult(r)
+                    setQuery('')
+                  }}
+                  title={isCrimeType ? 'A crime type filters cases — it isn\u2019t a single node to open yet.' : undefined}
+                  className={cn(
+                    'flex w-full items-center gap-2 px-3 py-2 text-left text-sm',
+                    isCrimeType ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-surface-raised',
+                  )}
+                >
+                  {Icon ? (
+                    <span
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                      style={{ backgroundColor: `var(--${meta!.colorVar})` }}
+                      aria-hidden
+                    >
+                      <Icon className="h-3 w-3" style={{ stroke: '#fff' }} strokeWidth={2.5} />
+                    </span>
+                  ) : (
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-muted" aria-hidden />
+                  )}
+                  <span className="truncate text-text">{r.label}</span>
+                  <span className="ml-auto shrink-0 text-xs text-muted">
+                    {isCrimeType ? 'Crime type' : entityLabel(r.type as Exclude<typeof r.type, 'CrimeType'>, t)}
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </div>
   )
 }

@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Network } from 'lucide-react'
-import { useGraph } from '@/lib/queries/graph'
+import { useGraph, useEntityGraph } from '@/lib/queries/graph'
 import { GraphView, type GraphZoomApi } from './GraphView'
 import { GraphControls } from './GraphControls'
 import { GraphLegend } from './GraphLegend'
@@ -12,13 +12,30 @@ import { shortestPath, edgesOnPath } from './shortest-path'
 import { Card, CardBody, EmptyState } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useLanguage } from '@/providers/LanguageProvider'
-import type { GraphNodeType, RawGraphNode } from '@/lib/types'
+import type { GraphNodeType, GraphSearchResult, RawGraphNode } from '@/lib/types'
 
 export function GraphPage() {
-  const { personId } = useParams<{ personId: string }>()
+  const { personId, nodeType, entityId } = useParams<{
+    personId?: string
+    nodeType?: string
+    entityId?: string
+  }>()
   const navigate = useNavigate()
-  const centerId = personId ? Number(personId) : undefined
   const { t } = useLanguage()
+
+  // Two ways to arrive here: the legacy /graph/:personId (always a
+  // Person), or /graph/node/:nodeType/:entityId (Priority 21 — any
+  // entity type, reached by selecting a graph search result).
+  const activeType: GraphNodeType | undefined = nodeType
+    ? (nodeType as GraphNodeType)
+    : personId
+      ? 'Person'
+      : undefined
+  const activeId: number | undefined = nodeType
+    ? Number(entityId)
+    : personId
+      ? Number(personId)
+      : undefined
 
   const [hops, setHops] = useState(2)
   const [clustering, setClustering] = useState(false)
@@ -29,12 +46,23 @@ export function GraphPage() {
   const [selectedNode, setSelectedNode] = useState<RawGraphNode | null>(null)
   const [pathFrom, setPathFrom] = useState<string | null>(null)
   const [pathTo, setPathTo] = useState<string | null>(null)
+  const [flashNodeId, setFlashNodeId] = useState<string | null>(null)
 
   const [zoomApi, setZoomApi] = useState<GraphZoomApi | null>(null)
 
-  const { data, isLoading, isError } = useGraph(centerId, hops)
+  // Legacy hook stays wired to the Person-only route so existing deep
+  // links / callers of useGraph elsewhere are unaffected; the new
+  // generic hook covers every other entity type.
+  const legacyQuery = useGraph(personId ? activeId : undefined, hops)
+  const entityQuery = useEntityGraph(nodeType ? activeType : undefined, nodeType ? activeId : undefined, hops)
+  const { data, isLoading, isError } = personId ? legacyQuery : entityQuery
+
   const nodes = useMemo(() => data?.nodes ?? [], [data])
   const edges = useMemo(() => data?.edges ?? [], [data])
+
+  // Case context for search ranking (Priority 23) — the currently
+  // centered Crime id, when the graph is centered on one.
+  const caseId = activeType === 'Crime' ? activeId : undefined
 
   const path = useMemo(() => {
     if (!pathFrom || !pathTo) return null
@@ -66,12 +94,49 @@ export function GraphPage() {
     setPathTo(null)
   }
 
-  if (!centerId) {
+  // Priority 21 — selecting any graph search result centers the graph,
+  // highlights the node, expands its neighbors, opens the detail panel,
+  // and flashes it, while preserving the current zoom level (handled by
+  // GraphZoomApi.centerOnNode, which pans without changing scale).
+  function handleSelectSearchResult(result: GraphSearchResult) {
+    if (result.type === 'CrimeType') return // filter suggestion, not a navigable node — see GraphSearch.tsx
+    const isSameGraph = activeType === result.type && activeId === result.id
+    navigate(`/graph/node/${result.type}/${result.id}`)
+    setPathFrom(null)
+    setPathTo(null)
+    if (isSameGraph) {
+      // Already centered here — just re-flash/re-highlight instead of
+      // reloading, since the data won't change.
+      setFlashNodeId(result.node_key)
+      setTimeout(() => setFlashNodeId(null), 1000)
+    }
+  }
+
+  // Once the (possibly new) subgraph has loaded and the requested node
+  // is actually present, pan to it, select it, and flash it — covers
+  // both "just navigated to a brand-new center" and "selected a result
+  // already inside the currently-loaded graph".
+  useEffect(() => {
+    if (!data || !activeType || activeId === undefined) return
+    const key = `${activeType}:${activeId}`
+    const node = nodes.find((n) => n.id === key)
+    if (!node) return
+    setSelectedNode(node)
+    setFlashNodeId(key)
+    zoomApi?.centerOnNode(key)
+    const t2 = setTimeout(() => setFlashNodeId(null), 1000)
+    return () => clearTimeout(t2)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, activeType, activeId])
+
+  if (!activeType || activeId === undefined || Number.isNaN(activeId)) {
     return (
       <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-text">{t('graph_page.title', 'Network graph')}</h1>
-          <p className="text-sm text-muted">{t('graph_page.subtitle', 'Explore relationships around a person.')}</p>
+          <p className="text-sm text-muted">
+            {t('graph_page.subtitle', 'Search any name, vehicle, phone, FIR, org, or location to open its graph.')}
+          </p>
         </div>
         <Card>
           <CardBody>
@@ -80,12 +145,11 @@ export function GraphPage() {
               title={t('graph_page.no_graph_title', 'No graph loaded')}
               description={t(
                 'graph_page.no_graph_description',
-                "Every graph is centered on a person. Enter a person ID below to open one — "
-                + "there's no name search yet (see known limitations).",
+                'Search for anything below — a person, vehicle, phone number, FIR, organization, or location — to center a graph on it.',
               )}
             />
             <div className="mx-auto mt-4 max-w-xs">
-              <GraphSearch nodes={[]} onSelectNode={() => {}} onCenterOnPerson={centerOnPerson} />
+              <GraphSearch onSelectResult={handleSelectSearchResult} />
             </div>
           </CardBody>
         </Card>
@@ -98,7 +162,9 @@ export function GraphPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-text">{t('graph_page.title', 'Network graph')}</h1>
-          <p className="font-mono text-xs text-muted">{t('graph_page.centered_on', 'Centered on Person:')}{centerId}</p>
+          <p className="font-mono text-xs text-muted">
+            {t('graph_page.centered_on', 'Centered on')} {activeType}:{activeId}
+          </p>
         </div>
       </div>
 
@@ -132,7 +198,7 @@ export function GraphPage() {
               <EmptyState
                 icon={<Network className="h-6 w-6" />}
                 title="Couldn't load this graph"
-                description={`No person with id ${centerId}, or you don't have permission to view it.`}
+                description={`No ${activeType} with id ${activeId}, or you don't have permission to view it.`}
               />
             </Card>
           ) : (
@@ -144,6 +210,7 @@ export function GraphPage() {
               clustering={clustering}
               showEdgeLabels={showEdgeLabels}
               focusNodeId={focusNodeId}
+              flashNodeId={flashNodeId}
               pathNodeIds={pathNodeIds}
               pathEdgeKeys={pathEdgeKeys}
               selectedNodeId={selectedNode?.id ?? null}
@@ -155,7 +222,7 @@ export function GraphPage() {
 
         <div className="flex flex-col gap-3 overflow-y-auto">
           <GraphLegend nodes={nodes} visibleTypes={visibleTypes} onToggleType={toggleType} />
-          <GraphSearch nodes={nodes} onSelectNode={handleSelectNode} onCenterOnPerson={centerOnPerson} />
+          <GraphSearch caseId={caseId} onSelectResult={handleSelectSearchResult} />
           {selectedNode && (
             <NodeDetailPanel
               node={selectedNode}
@@ -163,7 +230,13 @@ export function GraphPage() {
               onCenterHere={
                 selectedNode.type === 'Person'
                   ? () => centerOnPerson(selectedNode.data.id as number)
-                  : undefined
+                  : () => handleSelectSearchResult({
+                      type: selectedNode.type,
+                      label: selectedNode.label,
+                      id: selectedNode.data.id as number,
+                      node_key: selectedNode.id,
+                      score: 1,
+                    })
               }
             />
           )}

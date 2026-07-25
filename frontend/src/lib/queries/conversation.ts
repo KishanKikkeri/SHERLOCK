@@ -2,11 +2,38 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { API_BASE_URL, apiFetch } from '@/lib/api-client'
 import { useAuthStore } from '@/store/auth-store'
 import type {
+  CaseOption,
   ConversationHistoryMessage,
   ConversationMessageResult,
   ConversationStreamEvent,
   ConversationSummaryResult,
+  InvestigationSession,
 } from '@/lib/types'
+
+export function useCases(search?: string) {
+  return useQuery({
+    queryKey: ['conversation', 'cases', search ?? ''],
+    queryFn: () => apiFetch<CaseOption[]>(`/conversation/cases${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+    staleTime: 30 * 1000,
+  })
+}
+
+// Priority 5: bind (or clear, with fir_id: null) the case this session is
+// scoped to — every subsequent turn on the session inherits it.
+export function useSetSessionCase() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ sessionId, firId }: { sessionId: number; firId: number | null }) =>
+      apiFetch<InvestigationSession>(`/sessions/${sessionId}/case`, {
+        method: 'PATCH',
+        body: { fir_id: firId },
+      }),
+    onSuccess: (_data, { sessionId }) => {
+      queryClient.invalidateQueries({ queryKey: ['sessions', sessionId] })
+      queryClient.invalidateQueries({ queryKey: ['sessions'] })
+    },
+  })
+}
 
 export function useConversationHistory(sessionId: number | undefined) {
   return useQuery({

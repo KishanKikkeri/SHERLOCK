@@ -2,17 +2,37 @@ import { Download, Eraser, FolderSearch, RotateCcw, Volume2, VolumeX } from 'luc
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { LanguageSelector } from '@/voice/LanguageSelector'
-import { useSessions } from '@/lib/queries/sessions'
-import { useClearConversation, useExportConversationPdf, useSummarizeConversation } from '@/lib/queries/conversation'
+import { useLanguage } from '@/providers/LanguageProvider'
+import { useSession, useSessions } from '@/lib/queries/sessions'
+import {
+  useCases,
+  useClearConversation,
+  useExportConversationPdf,
+  useSetSessionCase,
+  useSummarizeConversation,
+} from '@/lib/queries/conversation'
 import { useConversationContext } from '@/conversation/ConversationProvider'
 
 export function ConversationSidebar() {
-  const { sessionId, setSessionId, language, setLanguage, muted, toggleMuted, resetConversation, addMessage } =
+  const { sessionId, setSessionId, muted, toggleMuted, resetConversation, addMessage } =
     useConversationContext()
+  // Priority 26: this reads/writes the one global language context —
+  // the same one the header's LanguageToggle and every AI-generating
+  // backend service use — not a copy scoped to the Conversation screen.
+  const { language, setLanguage } = useLanguage()
   const { data: openSessions } = useSessions({ status: 'open' })
+  const { data: cases } = useCases()
+  const { data: activeSession } = useSession(sessionId)
+  const setCase = useSetSessionCase()
   const summarize = useSummarizeConversation()
   const clear = useClearConversation()
   const exportPdf = useExportConversationPdf()
+
+  async function handleCaseChange(value: string) {
+    if (sessionId === undefined) return
+    const firId = value ? Number(value) : null
+    await setCase.mutateAsync({ sessionId, firId })
+  }
 
   async function handleSummarize() {
     if (!sessionId) return
@@ -46,7 +66,32 @@ export function ConversationSidebar() {
       <CardBody className="flex flex-1 flex-col gap-4 overflow-y-auto">
         <div>
           <p className="mb-1.5 text-xs font-medium text-muted">Language</p>
-          <LanguageSelector value={language} onChange={setLanguage} />
+          <LanguageSelector
+            value={language}
+            onChange={(lang) => {
+              if (lang === 'en' || lang === 'kn') setLanguage(lang)
+            }}
+          />
+        </div>
+
+        <div>
+          <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted">
+            <FolderSearch className="h-3.5 w-3.5" /> Case scope
+          </p>
+          <select
+            value={activeSession?.fir_id ?? ''}
+            onChange={(e) => handleCaseChange(e.target.value)}
+            disabled={sessionId === undefined || setCase.isPending}
+            title={sessionId === undefined ? 'Send a message first to start a session, then pick a case' : 'Scope this conversation to one case'}
+            className="h-9 w-full rounded-md border border-border bg-surface-raised px-2 text-sm text-text outline-none focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50"
+          >
+            <option value="">All Cases</option>
+            {cases?.map((c) => (
+              <option key={c.fir_id} value={c.fir_id}>
+                {c.fir_number} — {c.crime_type ?? 'case'} {c.district ? `(${c.district})` : ''}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div>

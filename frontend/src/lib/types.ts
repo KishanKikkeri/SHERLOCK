@@ -41,6 +41,15 @@ export interface UserOut {
 export type SessionStatus = 'open' | 'closed' | 'reopened' | 'archived'
 export type SessionPriority = 'low' | 'medium' | 'high' | 'critical'
 
+export interface CaseOption {
+  fir_id: number
+  fir_number: string
+  status: string
+  crime_type: string | null
+  district: string | null
+  filed_date: string | null
+}
+
 export interface InvestigationSession {
   id: number
   session_code: string
@@ -227,6 +236,27 @@ export interface GraphResponse {
   nodes: RawGraphNode[]
   edges: RawGraphEdge[]
   center?: string
+}
+
+// GET /graph/search — Priority 18-20. `type` is a real GraphNodeType for
+// every navigable result; 'CrimeType' is the one pseudo-type (a crime
+// category isn't itself a graph node, so it can't be centered on — the
+// UI treats it as a filter suggestion instead of a navigation target).
+export type GraphSearchResultType = GraphNodeType | 'CrimeType'
+
+export interface GraphSearchResult {
+  type: GraphSearchResultType
+  label: string
+  id: number | string
+  node_key: string
+  score: number
+  meta?: Record<string, unknown>
+}
+
+export interface GraphSearchResponse {
+  query: string
+  count: number
+  results: GraphSearchResult[]
 }
 
 export interface BoardIntelligence {
@@ -440,6 +470,10 @@ export interface ExecutiveReport {
   entities: { type: string; id: string }[]
   timeline: { label: string; agent: string }[]
   sources: string[]
+  /** Priority 25/28/30: which language every prose field above is
+   * actually in. Absent on any backend response predating this field —
+   * treat as 'en' (see AnalyticsTopicCard.tsx's useTranslatedExecutiveReport). */
+  language?: 'en' | 'kn'
 }
 
 // ---------------------------------------------------------------------------

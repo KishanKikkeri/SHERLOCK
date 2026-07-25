@@ -4,6 +4,26 @@ import type { ApiError, TokenResponse } from './types'
 export const API_BASE_URL: string =
   import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
+// Priority 26 — Global Language Context. Mirrors LanguageProvider's own
+// storage key (frontend/src/providers/LanguageProvider.tsx) rather than
+// importing the provider directly, since api-client.ts is a plain
+// module (no React context) used from places outside any component
+// tree. Every request carries whatever language is currently active, so
+// the backend's `LanguageContextMiddleware` (backend/language/context.py)
+// can resolve it for any AI-generating service that doesn't already take
+// an explicit `language` argument — no per-call-site plumbing needed.
+const LANGUAGE_STORAGE_KEY = 'sherlock.language'
+const LANGUAGE_HEADER = 'X-App-Language'
+
+function getActiveLanguage(): string {
+  try {
+    const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY)
+    return stored === 'en' || stored === 'kn' ? stored : 'en'
+  } catch {
+    return 'en'
+  }
+}
+
 // Coalesce concurrent refresh attempts into a single in-flight request
 // instead of firing one per failed call.
 let refreshInFlight: Promise<boolean> | null = null
@@ -64,6 +84,7 @@ export async function apiFetch<T>(
     const accessToken = useAuthStore.getState().accessToken
     const finalHeaders: Record<string, string> = {
       ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      [LANGUAGE_HEADER]: getActiveLanguage(),
       ...(headers as Record<string, string> | undefined),
     }
     if (!skipAuth && accessToken) {

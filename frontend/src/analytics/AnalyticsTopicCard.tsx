@@ -22,36 +22,46 @@ const RISK_TONE: Record<ExecutiveReport['risk_level'], BadgeProps['tone']> = {
   Unknown: 'neutral',
 }
 
-/** The Chief Agent / Executive Summarizer always generate their output
- * in English (see backend/intelligence/executive_summary.py). This is
- * the ONLY place that content gets translated for display — via the
- * existing POST /language/translate (through LanguageProvider's
- * translateDynamic, which caches so the same finding is never sent
- * twice) — never recomputed, and the static chrome around it (labels
- * like "Key findings") comes from the resource bundle via t(), not from
- * this call. English UI renders the original text with no extra
- * round-trip. */
+/** The Chief Agent / Executive Summarizer generate their output directly
+ * in the active language when possible (Priority 27/29 — see
+ * backend/agents/chief/agent.py and backend/intelligence/
+ * executive_summary.py`'s `language` parameter); `report.language` says
+ * which language that already happened in. Only when it's missing
+ * (older backend) or doesn't match the current UI language does this
+ * hook fall back to translating client-side via the existing
+ * POST /language/translate (through LanguageProvider's translateDynamic,
+ * which caches so the same finding is never sent twice) — never
+ * recomputed, and the static chrome around it (labels like "Key
+ * findings") comes from the resource bundle via t(), not from this
+ * call. English UI (or an already-native report) renders the original
+ * text with no extra round-trip. */
 function useTranslatedExecutiveReport(report: ExecutiveReport | undefined) {
   const { language, translateDynamic } = useLanguage()
   const [translated, setTranslated] = useState<ExecutiveReport | undefined>(report)
+  const reportLanguage = report?.language ?? 'en'
 
   useEffect(() => {
     if (!report) {
       setTranslated(undefined)
       return
     }
-    if (language === 'en') {
+    if (language === reportLanguage) {
+      // Either both English (the common case), or the backend already
+      // generated this report natively in the active language — either
+      // way, translating it again would be redundant at best and
+      // garbling at worst (re-translating already-Kannada text tagged
+      // as if it were English).
       setTranslated(report)
       return
     }
     let cancelled = false
-    setTranslated(report) // show the English original immediately while translating
+    setTranslated(report) // show the original immediately while translating
     async function run() {
       const [summary, keyFindings, recommendations, supportingEvidence] = await Promise.all([
-        translateDynamic(report!.summary),
-        Promise.all(report!.key_findings.map((f) => translateDynamic(f))),
-        Promise.all(report!.recommendations.map((r) => translateDynamic(r))),
-        Promise.all(report!.supporting_evidence.map((e) => translateDynamic(e))),
+        translateDynamic(report!.summary, reportLanguage),
+        Promise.all(report!.key_findings.map((f) => translateDynamic(f, reportLanguage))),
+        Promise.all(report!.recommendations.map((r) => translateDynamic(r, reportLanguage))),
+        Promise.all(report!.supporting_evidence.map((e) => translateDynamic(e, reportLanguage))),
       ])
       if (!cancelled) {
         setTranslated({
@@ -67,7 +77,7 @@ function useTranslatedExecutiveReport(report: ExecutiveReport | undefined) {
     return () => {
       cancelled = true
     }
-  }, [report, language, translateDynamic])
+  }, [report, reportLanguage, language, translateDynamic])
 
   return translated
 }

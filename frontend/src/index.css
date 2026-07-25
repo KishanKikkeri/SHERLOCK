@@ -356,3 +356,16 @@
   --density-row-h: 44px;
   --density-input-h: 40px;
 }
+
+/* ── Graph search navigation flash (Priority 21) ──
+   Brief pulse ring on a node right after navigating to it from a graph
+   search result, so the investigator's eye finds it immediately even
+   in a dense, already-rendered graph. */
+@keyframes graph-flash-pulse {
+  0%   { opacity: 1;   stroke-width: 2;  }
+  50%  { opacity: 0.25; stroke-width: 5; }
+  100% { opacity: 0;   stroke-width: 2;  }
+}
+.graph-flash-ring {
+  animation: graph-flash-pulse 900ms ease-out 2;
+}

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react'
 import { useVoice } from '@/voice/useVoice'
 import { useConversation } from '@/conversation/hooks/useConversation'
+import { useLanguage } from '@/providers/LanguageProvider'
 
 type ConversationContextValue = ReturnType<typeof useConversation> & {
   voice: ReturnType<typeof useVoice>
@@ -20,6 +21,7 @@ const ConversationContext = createContext<ConversationContextValue | null>(null)
  */
 export function ConversationProvider({ children }: { children: ReactNode }) {
   const conversation = useConversation()
+  const { language } = useLanguage()
 
   const handleVoiceCommand = useCallback(
     (text: string) => {
@@ -29,7 +31,13 @@ export function ConversationProvider({ children }: { children: ReactNode }) {
     [conversation.sendMessage],
   )
 
-  const voice = useVoice(handleVoiceCommand)
+  // Priority 32: previously called as `useVoice(handleVoiceCommand)` with
+  // no second argument, so it silently defaulted to `'en'` regardless of
+  // the active UI language — speech recognition and synthesis stayed in
+  // English even in Kannada mode. `useVoice` already tracks this via a
+  // ref internally (see its own "Phase 6: voice defaults follow the UI
+  // language" comment) — it just never actually received the value.
+  const voice = useVoice(handleVoiceCommand, language)
 
   const value = useMemo(() => ({ ...conversation, voice }), [conversation, voice])
 

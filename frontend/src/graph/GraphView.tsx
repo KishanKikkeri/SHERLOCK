@@ -13,6 +13,10 @@ export interface GraphZoomApi {
   zoomOut: () => void
   zoomToFit: () => void
   reset: () => void
+  /** Pan so `nodeId` is centered in the viewport, keeping the current
+   * zoom scale (Priority 21 — "Preserve previous zoom level"). No-op if
+   * the node isn't in the current simulation yet (e.g. still loading). */
+  centerOnNode: (nodeId: string) => void
 }
 
 interface GraphViewProps {
@@ -26,6 +30,10 @@ interface GraphViewProps {
   pathNodeIds: Set<string> | null
   pathEdgeKeys: Set<string> | null
   selectedNodeId: string | null
+  /** Node to briefly pulse-highlight, e.g. right after navigating to it
+   * from a graph search result (Priority 21). Caller clears this after
+   * ~1s; purely visual, independent of selectedNodeId/focusNodeId. */
+  flashNodeId?: string | null
   onSelectNode: (node: RawGraphNode | null) => void
   onZoomReady: (api: GraphZoomApi | null) => void
 }
@@ -44,6 +52,7 @@ export function GraphView({
   pathNodeIds,
   pathEdgeKeys,
   selectedNodeId,
+  flashNodeId = null,
   onSelectNode,
   onZoomReady,
 }: GraphViewProps) {
@@ -152,6 +161,18 @@ export function GraphView({
           .call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))
       },
       reset: () => svg.transition().duration(200).call(zoom.transform, d3.zoomIdentity),
+      centerOnNode: (nodeId: string) => {
+        const node = getNode(nodeId)
+        if (!node || node.x === undefined || node.y === undefined) return
+        const current = d3.zoomTransform(svg.node() as SVGSVGElement)
+        const scale = current.k
+        const tx = dims.width / 2 - scale * node.x
+        const ty = dims.height / 2 - scale * node.y
+        svg
+          .transition()
+          .duration(400)
+          .call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))
+      },
     }
     onZoomReady(api)
 
@@ -313,6 +334,13 @@ export function GraphView({
                       <circle
                         r={radius + 4}
                         className={cn('fill-none', onPath ? 'stroke-accent' : 'stroke-ring')}
+                        strokeWidth={2}
+                      />
+                    )}
+                    {n.id === flashNodeId && (
+                      <circle
+                        r={radius + 4}
+                        className="graph-flash-ring fill-none stroke-accent"
                         strokeWidth={2}
                       />
                     )}

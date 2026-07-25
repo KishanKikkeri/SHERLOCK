@@ -72,6 +72,7 @@ export function AppRoutes() {
             <Route path="/investigations/:id/board" element={<Lazy><InvestigationBoardPage /></Lazy>} />
             <Route path="/investigations/:id/findings" element={<Lazy><FindingsPage /></Lazy>} />
             <Route path="/graph" element={<Lazy><GraphPage /></Lazy>} />
+            <Route path="/graph/node/:nodeType/:entityId" element={<Lazy><GraphPage /></Lazy>} />
             <Route path="/graph/:personId" element={<Lazy><GraphPage /></Lazy>} />
             <Route path="/offender" element={<Lazy><HighRiskPersonsPage /></Lazy>} />
             <Route path="/offender/:personId" element={<Lazy><OffenderProfilePage /></Lazy>} />

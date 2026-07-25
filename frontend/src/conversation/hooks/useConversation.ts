@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react'
 import { streamConversationMessage } from '@/lib/queries/conversation'
-import { useConversationStore, type ChatMessage } from '@/conversation/store'
+import { useConversationStore, displayMessage, type ChatMessage } from '@/conversation/store'
+import { useLanguage } from '@/providers/LanguageProvider'
 import type { ConversationStreamEvent } from '@/lib/types'
 
 function newMessageId() {
@@ -17,6 +18,7 @@ function newMessageId() {
  */
 export function useConversation() {
   const store = useConversationStore()
+  const { language } = useLanguage()
   const abortRef = useRef<AbortController | null>(null)
 
   const sendMessage = useCallback(
@@ -48,7 +50,7 @@ export function useConversation() {
 
       try {
         await streamConversationMessage(
-          { sessionId: store.sessionId, message: trimmed, language: store.language },
+          { sessionId: store.sessionId, message: trimmed, language },
           (event: ConversationStreamEvent) => {
             store.applyStreamEvent(event)
 
@@ -73,7 +75,7 @@ export function useConversation() {
                 if (typeof data.session_id === 'number') store.setSessionId(data.session_id)
                 store.updateMessage(assistantId, {
                   pending: false,
-                  text: (finalReport?.narrative as string) || event.message || '',
+                  text: (finalReport?.narrative as string) || displayMessage(event) || '',
                   citations: (data.citations as ChatMessage['citations']) ?? undefined,
                   suggestedQuestions: (data.suggested_questions as string[]) ?? undefined,
                 })
@@ -81,13 +83,14 @@ export function useConversation() {
             } else if (event.event_type === 'clarification_needed') {
               store.updateMessage(assistantId, {
                 pending: false,
-                text: event.message || 'Could you clarify who/what you mean?',
+                text: displayMessage(event) || 'Could you clarify who/what you mean?',
               })
             } else if (event.event_type === 'error') {
+              const message = displayMessage(event) || 'Something went wrong.'
               store.updateMessage(assistantId, {
                 pending: false,
-                error: event.message || 'Something went wrong.',
-                text: event.message || 'Something went wrong.',
+                error: message,
+                text: message,
               })
             }
           },
@@ -101,7 +104,7 @@ export function useConversation() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [store.sessionId, store.language, store.isStreaming],
+    [store.sessionId, language, store.isStreaming],
   )
 
   const cancel = useCallback(() => {

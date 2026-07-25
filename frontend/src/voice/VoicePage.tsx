@@ -1,63 +1,75 @@
-import { useCallback, useState } from 'react'
-import { Mic, MicOff, Ear, Volume2, VolumeX, Info } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Mic, MicOff, Ear, Volume2, VolumeX, Info, MessageSquare } from 'lucide-react'
 import { useVoice } from './useVoice'
 import { useAudioRecorder } from './useAudioRecorder'
 import { Waveform } from './Waveform'
 import { VUMeter } from './VUMeter'
-import { VoiceTurnCard } from './VoiceTurnCard'
-import { newTurnId, type VoiceConversationTurn } from './conversation-turn'
-import { useVoiceCommand, useVoiceCommandPhrases, useVoiceQuery } from '@/lib/queries/voice'
+import { useConversation } from '@/conversation/hooks/useConversation'
+import { useConversationStore, type ChatMessage } from '@/conversation/store'
+import { ConversationMessage } from '@/conversation/ConversationMessage'
+import { AgentExecutionTimeline } from '@/conversation/AgentExecutionTimeline'
+import { useVoiceCommandPhrases, useVoiceQuery } from '@/lib/queries/voice'
 import { useSessions } from '@/lib/queries/sessions'
 import { Card, CardBody, CardHeader, EmptyState } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { useLanguage } from '@/providers/LanguageProvider'
 
+function newMessageId() {
+  return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+}
+
+/**
+ * Priority 14-17 — Voice, rebuilt on the exact same conversation state
+ * as the Conversation screen (`useConversationStore`, a zustand store —
+ * already global, not React-context-scoped) instead of a parallel local
+ * `turns` array. A question typed on /conversation and a follow-up
+ * spoken here read the same session_id and the same message history:
+ * "Show suspects" typed, then "Which one is most dangerous?" spoken,
+ * resolves the pronoun correctly because it's literally the same
+ * conversation, not two conversations compared after the fact.
+ */
 export function VoicePage() {
   const { language, t } = useLanguage()
   const [useServerAudio, setUseServerAudio] = useState(false)
-  const [sessionId, setSessionId] = useState<number | undefined>(undefined)
-  const [turns, setTurns] = useState<VoiceConversationTurn[]>([])
   const [muted, setMuted] = useState(false)
 
   const { data: openSessions } = useSessions({ status: 'open' })
   const { data: phrases } = useVoiceCommandPhrases()
-  const voiceCommand = useVoiceCommand()
   const voiceQuery = useVoiceQuery()
   const recorder = useAudioRecorder()
 
-  const addTurn = useCallback((turn: VoiceConversationTurn) => {
-    setTurns((prev) => [turn, ...prev])
-  }, [])
+  // Same hook the Conversation screen's ChatComposer/VoiceButton use —
+  // same zustand store underneath, so sessionId/messages/timeline are
+  // shared automatically regardless of which screen is mounted.
+  const { messages, timeline, isStreaming, sessionId, sendMessage, setSessionId } = useConversation()
+  const store = useConversationStore()
 
-  const updateTurn = useCallback((id: string, patch: Partial<VoiceConversationTurn>) => {
-    setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
-  }, [])
-
-  // ── Path A: browser STT -> POST /voice/command ──────────────────
+  // ── Path A: browser STT -> shared conversation pipeline ──────────
   const handleBrowserCommand = useCallback(
-    async (text: string) => {
-      const id = newTurnId()
-      addTurn({ id, query: text, language, path: 'browser', timestamp: new Date().toISOString(), pending: true })
-      try {
-        const result = await voiceCommand.mutateAsync({ transcript: text, session_id: sessionId })
-        updateTurn(id, {
-          pending: false,
-          intent: result.intent,
-          spokenResponse: result.spoken_response,
-          data: result.data,
-        })
-        if (result.session_id) setSessionId(result.session_id)
-        if (!muted) voice.actions.speak(result.spoken_response)
-      } catch {
-        updateTurn(id, { pending: false, error: 'Command failed — check the backend is reachable.' })
-      }
+    (text: string) => {
+      void sendMessage(text)
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sessionId, muted, language, addTurn, updateTurn],
+    [sendMessage],
   )
 
-  const voice = useVoice(handleBrowserCommand, language)
+  const wakePhraseList = phrases ? Object.values(phrases).map((p) => p.en) : undefined
+  const voice = useVoice(handleBrowserCommand, language as 'en' | 'kn', wakePhraseList)
+
+  // Priority 16 — speak the assistant's reply as soon as it's ready.
+  // Guarded so each finished assistant message is only spoken once,
+  // and reset per-turn so speakStream's "already spoken" cursor
+  // doesn't bleed into the next answer.
+  const lastSpokenIdRef = useRef<string | null>(null)
+  const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
+  useEffect(() => {
+    if (!lastAssistant || lastAssistant.pending || muted) return
+    if (lastSpokenIdRef.current === lastAssistant.id) return
+    lastSpokenIdRef.current = lastAssistant.id
+    voice.actions.resetSpeakStream()
+    voice.actions.speakStream(lastAssistant.text, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastAssistant?.id, lastAssistant?.pending, muted])
 
   const handleReplay = useCallback(
     (text: string) => {
@@ -68,34 +80,24 @@ export function VoicePage() {
   )
 
   // ── Path B: record -> POST /voice/query (Kannada fallback) ──────
-  const [pendingTurnId, setPendingTurnId] = useState<string | null>(null)
-
+  // Writes into the same shared store as Path A, so switching between
+  // browser STT and server-side audio mid-session still reads as one
+  // conversation, not two.
   async function handleStartRecording() {
     await recorder.start()
   }
 
   async function handleStopRecording() {
     const blob = await recorder.stop()
-    const id = newTurnId()
-    setPendingTurnId(id)
-    addTurn({
-      id,
-      query: '(transcribing…)',
-      language,
-      path: 'server',
-      timestamp: new Date().toISOString(),
-      pending: true,
-    })
+    const userId = newMessageId()
+    const assistantId = newMessageId()
+    store.addMessage({ id: userId, role: 'user', text: '(transcribing…)', pending: true, createdAt: new Date().toISOString() })
+    store.addMessage({ id: assistantId, role: 'assistant', text: '', pending: true, createdAt: new Date().toISOString() })
     try {
       const result = await voiceQuery.mutateAsync({ audioBlob: blob, sessionId, languageHint: language })
       const spoken = language === 'en' ? result.spoken_response_en : result.spoken_response
-      updateTurn(id, {
-        query: result.transcript || '(no speech detected)',
-        pending: false,
-        intent: result.intent,
-        spokenResponse: spoken,
-        data: result.data,
-      })
+      store.updateMessage(userId, { text: result.transcript || '(no speech detected)', pending: false })
+      store.updateMessage(assistantId, { text: spoken, pending: false, intent: result.intent })
       if (result.session_id) setSessionId(result.session_id)
       if (!muted) {
         if (result.audio_base64 && result.audio_content_type) {
@@ -108,11 +110,12 @@ export function VoicePage() {
         }
       }
     } catch {
-      updateTurn(id, { pending: false, error: 'Voice query failed — check the backend is reachable.' })
-    } finally {
-      setPendingTurnId(null)
+      store.updateMessage(userId, { pending: false, error: 'Transcription failed.', text: '(transcription failed)' })
+      store.updateMessage(assistantId, { pending: false, error: 'Voice query failed — check the backend is reachable.', text: 'Voice query failed.' })
     }
   }
+
+  const orderedMessages = messages
 
   return (
     <div className="flex h-[calc(100vh-56px-48px)] flex-col gap-4">
@@ -120,7 +123,9 @@ export function VoicePage() {
         <div>
           <h1 className="text-2xl font-semibold text-text">{t('navigation.voice', 'Voice')}</h1>
           <p className="text-xs text-muted">
-            {sessionId ? `Attached to session #${sessionId}` : 'No session attached — voice commands that need one will ask'}
+            {sessionId
+              ? `Attached to session #${sessionId} — same conversation as the Conversation screen`
+              : 'No session attached — voice commands that need one will ask'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -169,6 +174,12 @@ export function VoicePage() {
                 "{voice.state.transcript}"
               </p>
             )}
+            {voice.state.conversationActive && !voice.state.transcript && (
+              <p className="text-xs text-muted">Listening — no need to say the wake word again yet</p>
+            )}
+            {voice.state.speaking && (
+              <p className="text-xs text-accent">Speaking — say anything to interrupt</p>
+            )}
             {recorder.isRecording && <p className="text-sm text-warning">Recording — tap again to stop and send</p>}
 
             <div className="flex items-center gap-3">
@@ -197,7 +208,7 @@ export function VoicePage() {
                   variant={recorder.isRecording ? 'primary' : 'secondary'}
                   size="lg"
                   onClick={recorder.isRecording ? handleStopRecording : handleStartRecording}
-                  isLoading={voiceQuery.isPending && pendingTurnId !== null}
+                  isLoading={voiceQuery.isPending}
                 >
                   {recorder.isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                   {recorder.isRecording ? 'Stop & send' : 'Tap to record'}
@@ -236,18 +247,31 @@ export function VoicePage() {
         </Card>
 
         <Card className="flex flex-col overflow-hidden">
-          <CardHeader title="Conversation history" />
+          <CardHeader title="Conversation" />
           <CardBody className="flex-1 overflow-y-auto">
-            {turns.length === 0 ? (
+            {messages.length === 0 ? (
               <EmptyState
                 icon={<Mic className="h-6 w-6" />}
                 title="Nothing yet"
-                description="Say “Sherlock” or hold to talk, and your commands will show up here."
+                description='Say "Sherlock" or hold to talk — this is the same conversation as the Conversation screen.'
               />
             ) : (
-              <div className="flex flex-col gap-2">
-                {turns.map((turn) => (
-                  <VoiceTurnCard key={turn.id} turn={turn} onReplay={handleReplay} />
+              <div className="flex flex-col gap-4">
+                {isStreaming && <AgentExecutionTimeline steps={timeline} />}
+                {orderedMessages.map((m: ChatMessage) => (
+                  <div key={m.id} className="group relative">
+                    <ConversationMessage message={m} />
+                    {m.role === 'assistant' && !m.pending && m.text && (
+                      <button
+                        type="button"
+                        onClick={() => handleReplay(m.text)}
+                        className="mt-1 flex items-center gap-1 text-xs text-muted hover:text-text"
+                        title="Replay this response"
+                      >
+                        <MessageSquare className="h-3 w-3" /> Replay
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
