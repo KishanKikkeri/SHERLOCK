@@ -102,8 +102,10 @@ export function useConversationV2() {
               })
             }
           },
-          controller.signal
+          controller.signal,
+          language
         )
+
       } catch (err) {
         console.error('Streaming error:', err)
         const errMsg = (err as any)?.detail || 'Failed to stream response.'

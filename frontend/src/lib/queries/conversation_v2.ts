@@ -350,7 +350,8 @@ export async function streamConversationMessageV2(
   id: number,
   message: string,
   onEvent: (event: { event_type: string; message: string; agent: string; data: any }) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  language?: string
 ): Promise<void> {
   const accessToken = useAuthStore.getState().accessToken
   const res = await fetch(`${API_BASE_URL}/v2/conversations/${id}/stream`, {
@@ -360,8 +361,9 @@ export async function streamConversationMessageV2(
       'Content-Type': 'application/json',
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, language }),
   })
+
   if (!res.ok || !res.body) {
     const detail = await res.json().catch(() => ({ detail: res.statusText }))
     throw { status: res.status, detail: detail.detail ?? res.statusText }

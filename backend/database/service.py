@@ -295,15 +295,34 @@ class DatabaseService:
         return row
 
     def list_cases(self, search: str | None = None, limit: int = 50) -> list[FIR]:
-        """Priority 5/7: cases for the Conversation page's case selector.
-        Joins in Crime for type/timestamp so the dropdown can show
-        something more useful than a bare FIR number. `search` matches
-        against fir_number (case-insensitive substring) — good enough for
-        a selector list; not a full search feature."""
-        query = self.session.query(FIR).join(Crime, FIR.crime_id == Crime.id)
+        """Lists and searches FIR records by fir_number, crime_type, location district/city, or status."""
+        import re
+        from sqlalchemy import String, or_
+        from backend.database.models import Location
+        query = self.session.query(FIR).join(Crime, FIR.crime_id == Crime.id).outerjoin(Location, Crime.location_id == Location.id)
         if search:
-            query = query.filter(FIR.fir_number.ilike(f"%{search}%"))
+            cleaned = search
+            for phrase in [
+                "list recent", "list cases", "show me all", "show me", "cases related to", "cases in",
+                "status of fir", "status of", "find connections between", "who was the main accused in the",
+                "list cases involving", "what evidence was gathered for case", "cases involving", "incidents near"
+            ]:
+                cleaned = re.sub(re.escape(phrase), "", cleaned, flags=re.IGNORECASE).strip()
+            
+            words = [w for w in re.split(r"\W+", cleaned) if len(w) >= 2]
+            if words:
+                filters = []
+                for w in words:
+                    filters.append(FIR.fir_number.ilike(f"%{w}%"))
+                    filters.append(Crime.type.cast(String).ilike(f"%{w}%"))
+                    filters.append(Location.district.ilike(f"%{w}%"))
+                    filters.append(Location.name.ilike(f"%{w}%"))
+                    filters.append(FIR.status.cast(String).ilike(f"%{w}%"))
+                query = query.filter(or_(*filters))
+
+
         return query.order_by(FIR.filed_date.desc()).limit(limit).all()
+
 
     def assign_investigator(self, session_id: int, officer_id: int, role: str = "investigator",
                              actor_officer_id: int | None = None) -> SessionAssignment | None:

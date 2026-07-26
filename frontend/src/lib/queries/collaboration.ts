@@ -103,26 +103,14 @@ export function useSessionDiscussions(sessionId: number | undefined) {
  * endpoint exists (only GET /sessions/{id}/discussions), so this composes
  * one client-side from the same top-5-recent-sessions set.
  */
-export function useDashboardDiscussions(sessions: InvestigationSession[] | undefined) {
-  const topSessionIds = (sessions ?? [])
-    .slice()
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
-    .slice(0, 5)
-    .map((s) => s.id)
+export function useDashboardDiscussions(_sessions?: InvestigationSession[]) {
 
-  const results = useQueries({
-    queries: topSessionIds.map((id) => ({
-      queryKey: ['discussions', id],
-      queryFn: () => apiFetch<DiscussionRecord[]>(`/sessions/${id}/discussions`),
-      staleTime: 30 * 1000,
-    })),
+  const query = useQuery({
+    queryKey: ['discussions', 'recent'],
+    queryFn: () => apiFetch<DiscussionRecord[]>('/discussions/recent'),
+    staleTime: 15 * 1000,
   })
 
-  const isLoading = results.some((r) => r.isLoading)
-  const items = results
-    .flatMap((r) => r.data ?? [])
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .slice(0, 8)
-
-  return { items, isLoading }
+  return { items: query.data ?? [], isLoading: query.isLoading }
 }
+

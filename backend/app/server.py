@@ -15,7 +15,9 @@ frontend/vite.config.ts) and talk to this backend directly on :8000.
 """
 
 import logging
+import os
 from pathlib import Path
+import sqlite3
 
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
@@ -84,8 +86,6 @@ def serve_frontend():
 
 
 if __name__ == "__main__":
-    import os
-
     import uvicorn
 
     # Catalyst AppSail assigns the port to listen on via this env var and

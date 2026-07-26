@@ -195,20 +195,35 @@ class LLMOrchestrator:
                 history = load_conversation_messages(self.db, conv.id)
 
                 # Format the tool results into a natural response
+                if "results" in tool_result and isinstance(tool_result["results"], list):
+                    findings_payload = tool_result["results"]
+                elif "findings" in tool_result and isinstance(tool_result["findings"], list):
+                    findings_payload = tool_result["findings"]
+                elif "data" in tool_result and isinstance(tool_result["data"], list):
+                    findings_payload = tool_result["data"]
+                elif "data" in tool_result and isinstance(tool_result["data"], dict):
+                    findings_payload = [tool_result["data"]]
+                else:
+                    findings_payload = [tool_result]
+
                 formatted = self.llm.format_findings(
                     message,
-                    tool_result.get("findings", [tool_result]),
+                    findings_payload,
                     {"system_prompt": system_prompt},
                     language=language,
                 )
 
+
                 # Store final assistant reply
                 metadata = {}
-                if tool_result.get("findings"):
+                raw_findings = tool_result.get("findings") or tool_result.get("results") or []
+                if isinstance(raw_findings, list) and raw_findings:
                     metadata["citations"] = [
-                        {"source": f.get("source", ""), "text": f.get("title", "")}
-                        for f in tool_result["findings"][:5]
+                        {"source": f.get("source", "DB"), "text": f.get("title") or f.get("fir_number") or f.get("label") or "Finding"}
+                        for f in raw_findings[:5]
+                        if isinstance(f, dict)
                     ]
+
 
                 store_message(
                     self.db, conv.id, role="assistant",
@@ -339,12 +354,25 @@ class LLMOrchestrator:
             )
 
             # Format and return
+            if "results" in tool_result and isinstance(tool_result["results"], list):
+                findings_payload = tool_result["results"]
+            elif "findings" in tool_result and isinstance(tool_result["findings"], list):
+                findings_payload = tool_result["findings"]
+            elif "data" in tool_result and isinstance(tool_result["data"], list):
+                findings_payload = tool_result["data"]
+            elif "data" in tool_result and isinstance(tool_result["data"], dict):
+                findings_payload = [tool_result["data"]]
+            else:
+                findings_payload = [tool_result]
+
             formatted = self.llm.format_findings(
                 message,
-                tool_result.get("findings", [tool_result]),
+                findings_payload,
                 {"system_prompt": system_prompt},
                 language=language,
             )
+
+
 
             store_message(self.db, conv.id, role="assistant", content=formatted)
 
