@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, LayoutDashboard, Network, Lightbulb, Mic, Clock, FileText, CircleUser as UserCircle } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
@@ -15,19 +16,20 @@ import { useLanguage } from '@/providers/LanguageProvider'
 import { ConversationV2Provider } from '@/conversation/ConversationProviderV2'
 import { ChatAreaV2 } from '@/conversation/ChatAreaV2'
 import { ChatComposerV2 } from '@/conversation/ChatComposerV2'
+import { useConversationV2Store } from '@/conversation/storeV2'
 
-
-/**
- * Investigation detail — mission-control header, not a form.
- * Reference: Defender XDR's incident workspace — key metadata
- * (ID, priority, status, timestamps, presence) in a dense header
- * strip, actions as a toolbar, body content below.
- */
 export function InvestigationDetailPage() {
   const { id } = useParams<{ id: string }>()
   const sessionId = id ? Number(id) : undefined
   const { data: session, isLoading } = useSession(sessionId)
   const { t } = useLanguage()
+
+  useEffect(() => {
+    if (sessionId !== undefined) {
+      useConversationV2Store.getState().setInvestigationId(sessionId)
+    }
+  }, [sessionId])
+
 
   return (
     <div className="flex flex-col gap-4">

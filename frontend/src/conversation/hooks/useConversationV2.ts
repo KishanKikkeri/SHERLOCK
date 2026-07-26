@@ -64,13 +64,18 @@ export function useConversationV2() {
         created_at: new Date().toISOString(),
       }
 
-      // Optimistically add messages to query cache
+      // Optimistically add messages to query cache safely
       const messagesKey = ['v2', 'conversations', conversationId, 'messages']
-      queryClient.setQueryData<MessageV2[]>(messagesKey, (old) => [
-        ...(old || []),
-        userMsg,
-        assistantMsg,
-      ])
+      queryClient.setQueryData<MessageV2[]>(messagesKey, (old) => {
+        const existing = old ? [...old] : []
+        if (!existing.some((m) => m.id === userMsg.id)) {
+          existing.push(userMsg)
+        }
+        if (!existing.some((m) => m.id === assistantMsg.id)) {
+          existing.push(assistantMsg)
+        }
+        return existing
+      })
 
       store.clearTimeline()
       store.setStreaming(true)
@@ -89,43 +94,71 @@ export function useConversationV2() {
             if (event.event_type === 'assistant_reply') {
               finalReply = event.message
               queryClient.setQueryData<MessageV2[]>(messagesKey, (old) => {
-                if (!old) return []
-                return old.map((m) =>
-                  m.metadata.pending
-                    ? {
-                        ...m,
-                        content: finalReply,
-                        metadata: { ...m.metadata, pending: false },
-                      }
-                    : m
-                )
+                const list = old ? [...old] : []
+                const pendingIdx = list.findIndex((m) => m.metadata?.pending)
+                if (pendingIdx !== -1) {
+                  list[pendingIdx] = {
+                    ...list[pendingIdx],
+                    content: finalReply,
+                    metadata: { ...list[pendingIdx].metadata, pending: false },
+                  }
+                } else {
+                  list.push({
+                    id: Math.random() + 2,
+                    conversation_id: conversationId!,
+                    role: 'assistant',
+                    content: finalReply,
+                    tool_calls: null,
+                    tool_name: null,
+                    tool_result: null,
+                    tool_call_id: null,
+                    metadata: {},
+                    created_at: new Date().toISOString(),
+                  })
+                }
+                return list
               })
             }
           },
           controller.signal,
           language
         )
-
       } catch (err) {
         console.error('Streaming error:', err)
         const errMsg = (err as any)?.detail || 'Failed to stream response.'
         queryClient.setQueryData<MessageV2[]>(messagesKey, (old) => {
-          if (!old) return []
-          return old.map((m) =>
-            m.metadata.pending
-              ? {
-                  ...m,
-                  content: errMsg,
-                  metadata: { ...m.metadata, pending: false, error: true },
-                }
-              : m
-          )
+          const list = old ? [...old] : []
+          const pendingIdx = list.findIndex((m) => m.metadata?.pending)
+          if (pendingIdx !== -1) {
+            list[pendingIdx] = {
+              ...list[pendingIdx],
+              content: errMsg,
+              metadata: { ...list[pendingIdx].metadata, pending: false, error: true },
+            }
+          } else {
+            list.push({
+              id: Math.random() + 2,
+              conversation_id: conversationId!,
+              role: 'assistant',
+              content: errMsg,
+              tool_calls: null,
+              tool_name: null,
+              tool_result: null,
+              tool_call_id: null,
+              metadata: { error: true },
+              created_at: new Date().toISOString(),
+            })
+          }
+          return list
         })
       } finally {
         store.setStreaming(false)
-        queryClient.invalidateQueries({ queryKey: messagesKey })
-        queryClient.invalidateQueries({ queryKey: ['v2', 'conversations'] })
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: messagesKey })
+          queryClient.invalidateQueries({ queryKey: ['v2', 'conversations'] })
+        }, 500)
       }
+
     },
     [
       store.activeConversationId,

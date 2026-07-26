@@ -291,8 +291,10 @@ export function useConversationMessagesV2(id: number | undefined) {
     queryKey: ['v2', 'conversations', id, 'messages'],
     queryFn: () => apiFetch<MessageV2[]>(`/v2/conversations/${id}/messages`),
     enabled: id !== undefined,
+    staleTime: 30 * 1000,
   })
 }
+
 
 export function useSendConversationMessageV2() {
   const queryClient = useQueryClient()
@@ -392,4 +394,20 @@ export async function streamConversationMessageV2(
       }
     }
   }
+
+  // Flush remaining buffer line if any
+  if (buffer.trim()) {
+    const trimmed = buffer.trim()
+    if (trimmed.startsWith('data:')) {
+      const jsonText = trimmed.slice('data:'.length).trim()
+      if (jsonText) {
+        try {
+          onEvent(JSON.parse(jsonText))
+        } catch {
+          // Skip
+        }
+      }
+    }
+  }
 }
+

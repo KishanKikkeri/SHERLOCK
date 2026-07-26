@@ -36,6 +36,25 @@ def _serialize(record: DiscussionRecord) -> dict:
     }
 
 
+@router.get("/discussions/recent")
+def get_recent_discussions(limit: int = 10, _ctx=Depends(RequirePermission(VIEW_CASE))):
+    """Fetch the most recent multi-agent discussion records across all sessions."""
+    session = SessionLocal()
+    try:
+        records = (
+            session.query(DiscussionRecord)
+            .order_by(DiscussionRecord.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return [_serialize(r) for r in records]
+    except Exception:
+        logger.exception("GET /discussions/recent failed")
+        raise HTTPException(status_code=500, detail="Failed to fetch recent discussions.")
+    finally:
+        session.close()
+
+
 @router.get("/discussions/{discussion_id}")
 def get_discussion(discussion_id: int, _ctx=Depends(RequirePermission(VIEW_CASE))):
     session = SessionLocal()
@@ -51,6 +70,7 @@ def get_discussion(discussion_id: int, _ctx=Depends(RequirePermission(VIEW_CASE)
         raise HTTPException(status_code=500, detail="Failed to fetch discussion record.")
     finally:
         session.close()
+
 
 
 @router.get("/sessions/{session_id}/discussions")
@@ -79,22 +99,4 @@ def get_session_discussions(session_id: int, _ctx=Depends(RequirePermission(VIEW
     finally:
         session.close()
 
-
-@router.get("/discussions/recent")
-def get_recent_discussions(limit: int = 10, _ctx=Depends(RequirePermission(VIEW_CASE))):
-    """Fetch the most recent multi-agent discussion records across all sessions."""
-    session = SessionLocal()
-    try:
-        records = (
-            session.query(DiscussionRecord)
-            .order_by(DiscussionRecord.created_at.desc())
-            .limit(limit)
-            .all()
-        )
-        return [_serialize(r) for r in records]
-    except Exception:
-        logger.exception("GET /discussions/recent failed")
-        raise HTTPException(status_code=500, detail="Failed to fetch recent discussions.")
-    finally:
-        session.close()
 

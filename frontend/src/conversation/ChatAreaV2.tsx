@@ -38,9 +38,17 @@ export function ChatAreaV2() {
 
   return (
     <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-      {messages?.map((msg) => (
-        <MessageBubble key={msg.id} message={msg} onSend={sendMessage} />
-      ))}
+      {messages
+        ?.filter(
+          (m) =>
+            m.content ||
+            (m.tool_calls && m.tool_calls.length > 0) ||
+            m.role === 'tool' ||
+            m.metadata?.pending
+        )
+        .map((msg) => (
+          <MessageBubble key={msg.id} message={msg} onSend={sendMessage} />
+        ))}
 
       {isStreaming && (
         <div className="flex flex-col gap-3">
@@ -82,12 +90,20 @@ function MessageBubble({ message, onSend }: { message: MessageV2; onSend: (text:
               : 'bg-surface border border-border text-text'
           }`}
         >
-          {message.content && <p className="whitespace-pre-wrap">{message.content}</p>}
+          {message.metadata?.pending && !message.content ? (
+            <div className="flex items-center gap-2 text-xs text-muted py-0.5">
+              <span className="inline-block h-2 w-2 rounded-full bg-primary animate-ping" />
+              <span className="italic">Analyzing query and evidence...</span>
+            </div>
+          ) : (
+            message.content && <p className="whitespace-pre-wrap">{message.content}</p>
+          )}
 
           {/* Render tool invocation call in the assistant bubble */}
           {message.tool_calls && message.tool_calls.map((tc, idx) => (
             <div key={idx} className="mt-2 text-xs border-t border-border/40 pt-2 flex flex-col gap-1">
               <span className="font-mono text-muted flex items-center gap-1">
+
                 <Terminal className="h-3 w-3" /> Tool Call: {tc.name}
               </span>
               <pre className="rounded bg-surface-sunken p-1.5 font-mono text-[10px] overflow-x-auto text-muted">
