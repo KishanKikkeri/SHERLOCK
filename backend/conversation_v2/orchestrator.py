@@ -171,7 +171,7 @@ class LLMOrchestrator:
 
         while rounds < MAX_TOOL_ROUNDS:
             rounds += 1
-            result = self.llm.run_conversation(
+            result = await self.llm.run_conversation(
                 message=message if rounds == 1 else "",
                 history=history,
                 context={"system_prompt": system_prompt},
@@ -242,7 +242,7 @@ class LLMOrchestrator:
                 history = load_conversation_messages(self.db, conv.id)
 
                 # Format the tool results into a natural response
-                formatted = self.llm.format_findings(
+                formatted = await self.llm.format_findings(
                     message,
                     tool_result.get("findings", [tool_result]),
                     {"system_prompt": system_prompt},
@@ -313,7 +313,7 @@ class LLMOrchestrator:
         system_prompt = build_system_prompt(language, investigation_ctx)
 
         # 3. LLM call
-        result = self.llm.run_conversation(
+        result = await self.llm.run_conversation(
             message=message,
             history=history,
             context={"system_prompt": system_prompt},
@@ -386,7 +386,7 @@ class LLMOrchestrator:
             )
 
             # Format and return
-            formatted = self.llm.format_findings(
+            formatted = await self.llm.format_findings(
                 message,
                 tool_result.get("findings", [tool_result]),
                 {"system_prompt": system_prompt},

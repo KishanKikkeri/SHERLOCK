@@ -10,6 +10,7 @@ easy to change LLM models or keys without modifying the ConversationManager.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -187,8 +188,30 @@ class LLMResult:
 
 
 class ConversationLLM(ABC):
+    """
+    NOTE: every method here is `async def`, even though most adapter
+    implementations (Claude/OpenAI/Gemini) wrap a synchronous SDK call
+    underneath. This is deliberate: `LLMOrchestrator.handle_message` /
+    `stream_message` are `async def` running on FastAPI's single shared
+    event loop, and the app is started with a single uvicorn worker
+    (see backend/app/server.py). A synchronous, blocking network call
+    made directly from an `async def` — with no `await` and no thread
+    offload — freezes that one event loop for every request on the
+    server, not just the caller's: no other user's message, no page
+    load, not even the container's own `/health` check can be served
+    until the blocking call returns. That is what "Investigation
+    started, then nothing — ever — even after a page refresh" looks
+    like from the outside, and it's consistent with the platform
+    showing the whole app as "Degraded" (the healthcheck itself was
+    stuck behind the same block).
+
+    Each concrete adapter must run its actual blocking SDK call via
+    `await asyncio.to_thread(...)` so the event loop stays free while
+    waiting on the network. See ClaudeAdapter below for the pattern.
+    """
+
     @abstractmethod
-    def run_conversation(
+    async def run_conversation(
         self,
         message: str,
         history: list[dict],
@@ -199,7 +222,7 @@ class ConversationLLM(ABC):
         pass
 
     @abstractmethod
-    def format_findings(
+    async def format_findings(
         self,
         query: str,
         findings: list[dict],
@@ -210,7 +233,7 @@ class ConversationLLM(ABC):
         pass
 
     @abstractmethod
-    def format_analytics(
+    async def format_analytics(
         self,
         data: dict,
         language: str = "en"
@@ -219,7 +242,7 @@ class ConversationLLM(ABC):
         pass
 
     @abstractmethod
-    def completion(
+    async def completion(
         self,
         system_prompt: str,
         user_prompt: str,
@@ -236,9 +259,15 @@ class ConversationLLM(ABC):
 class ClaudeAdapter(ConversationLLM):
     def __init__(self, api_key: str):
         from anthropic import Anthropic
-        self.client = Anthropic(api_key=api_key)
+        # Explicit timeout: the SDK's default is several minutes, which
+        # means a stalled/blocked outbound path (e.g. restrictive egress
+        # in a hosting environment) hangs the request instead of failing
+        # fast with a visible error. 30s is generous for a 400-token
+        # reply; max_retries=1 keeps a genuine outage from compounding
+        # into a multi-minute wait via internal SDK retries.
+        self.client = Anthropic(api_key=api_key, timeout=30.0, max_retries=1)
 
-    def run_conversation(
+    async def run_conversation(
         self,
         message: str,
         history: list[dict],
@@ -281,7 +310,8 @@ class ClaudeAdapter(ConversationLLM):
                 "input_schema": t["parameters"]
             })
 
-        response = self.client.messages.create(
+        response = await asyncio.to_thread(
+            self.client.messages.create,
             model=CLAUDE_MODEL,
             max_tokens=400,
             system=system_prompt,
@@ -309,7 +339,7 @@ class ClaudeAdapter(ConversationLLM):
         intent = routed.intent if routed.intent != ConversationIntent.INVESTIGATE else ConversationIntent.CHITCHAT
         return LLMResult(reply=reply.strip(), intent=intent)
 
-    def format_findings(
+    async def format_findings(
         self,
         query: str,
         findings: list[dict],
@@ -330,7 +360,8 @@ class ClaudeAdapter(ConversationLLM):
         findings_text = json.dumps(findings[:10], indent=2)
         prompt = f"User query: {query}\n\nStructured findings:\n{findings_text}"
 
-        response = self.client.messages.create(
+        response = await asyncio.to_thread(
+            self.client.messages.create,
             model=CLAUDE_MODEL,
             max_tokens=400,
             system=system_prompt,
@@ -338,7 +369,7 @@ class ClaudeAdapter(ConversationLLM):
         )
         return "".join(block.text for block in response.content if block.type == "text").strip()
 
-    def format_analytics(
+    async def format_analytics(
         self,
         data: dict,
         language: str = "en"
@@ -351,7 +382,8 @@ class ClaudeAdapter(ConversationLLM):
             + language_directive(language)
         )
         prompt = f"Dashboard Data:\n{json.dumps(data, indent=2)}"
-        response = self.client.messages.create(
+        response = await asyncio.to_thread(
+            self.client.messages.create,
             model=CLAUDE_MODEL,
             max_tokens=300,
             system=system_prompt,
@@ -359,13 +391,14 @@ class ClaudeAdapter(ConversationLLM):
         )
         return "".join(block.text for block in response.content if block.type == "text").strip()
 
-    def completion(
+    async def completion(
         self,
         system_prompt: str,
         user_prompt: str,
         max_tokens: int = 400
     ) -> str:
-        response = self.client.messages.create(
+        response = await asyncio.to_thread(
+            self.client.messages.create,
             model=CLAUDE_MODEL,
             max_tokens=max_tokens,
             system=system_prompt,
@@ -383,10 +416,10 @@ class ClaudeAdapter(ConversationLLM):
 class OpenAIAdapter(ConversationLLM):
     def __init__(self, api_key: str, base_url: str | None = None, model: str | None = None):
         from openai import OpenAI
-        self.client = OpenAI(api_key=api_key, base_url=base_url)
+        self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=30.0, max_retries=1)
         self.model = model or "gpt-4o"
 
-    def run_conversation(
+    async def run_conversation(
         self,
         message: str,
         history: list[dict],
@@ -412,7 +445,8 @@ class OpenAIAdapter(ConversationLLM):
         # OpenAI tools list
         openai_tools = [{"type": "function", "function": t} for t in TOOL_SCHEMAS]
 
-        response = self.client.chat.completions.create(
+        response = await asyncio.to_thread(
+            self.client.chat.completions.create,
             model=self.model,
             messages=messages,
             tools=openai_tools,
@@ -432,14 +466,15 @@ class OpenAIAdapter(ConversationLLM):
         intent = routed.intent if routed.intent != ConversationIntent.INVESTIGATE else ConversationIntent.CHITCHAT
         return LLMResult(reply=reply.strip(), intent=intent)
 
-    def format_findings(
+    async def format_findings(
         self,
         query: str,
         findings: list[dict],
         context: dict,
         language: str = "en"
     ) -> str:
-        response = self.client.chat.completions.create(
+        response = await asyncio.to_thread(
+            self.client.chat.completions.create,
             model=self.model,
             messages=[
                 {"role": "system", "content": (
@@ -453,12 +488,13 @@ class OpenAIAdapter(ConversationLLM):
         )
         return response.choices[0].message.content.strip()
 
-    def format_analytics(
+    async def format_analytics(
         self,
         data: dict,
         language: str = "en"
     ) -> str:
-        response = self.client.chat.completions.create(
+        response = await asyncio.to_thread(
+            self.client.chat.completions.create,
             model=self.model,
             messages=[
                 {"role": "system", "content": (
@@ -474,13 +510,14 @@ class OpenAIAdapter(ConversationLLM):
         )
         return response.choices[0].message.content.strip()
 
-    def completion(
+    async def completion(
         self,
         system_prompt: str,
         user_prompt: str,
         max_tokens: int = 400
     ) -> str:
-        response = self.client.chat.completions.create(
+        response = await asyncio.to_thread(
+            self.client.chat.completions.create,
             model=self.model,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -503,7 +540,7 @@ class GeminiAdapter(ConversationLLM):
         # google-genai package uses GenAI client
         self.client = genai.Client(api_key=api_key)
 
-    def run_conversation(
+    async def run_conversation(
         self,
         message: str,
         history: list[dict],
@@ -560,7 +597,8 @@ class GeminiAdapter(ConversationLLM):
             max_output_tokens=400
         )
 
-        response = self.client.models.generate_content(
+        response = await asyncio.to_thread(
+            self.client.models.generate_content,
             model="gemini-2.5-pro",
             contents=contents,
             config=config
@@ -582,7 +620,7 @@ class GeminiAdapter(ConversationLLM):
         intent = routed.intent if routed.intent != ConversationIntent.INVESTIGATE else ConversationIntent.CHITCHAT
         return LLMResult(reply=reply.strip(), intent=intent)
 
-    def format_findings(
+    async def format_findings(
         self,
         query: str,
         findings: list[dict],
@@ -598,14 +636,15 @@ class GeminiAdapter(ConversationLLM):
             ),
             max_output_tokens=400
         )
-        response = self.client.models.generate_content(
+        response = await asyncio.to_thread(
+            self.client.models.generate_content,
             model="gemini-2.5-pro",
             contents=f"Query: {query}\nFindings: {json.dumps(findings[:10])}",
             config=config
         )
         return response.text.strip()
 
-    def format_analytics(
+    async def format_analytics(
         self,
         data: dict,
         language: str = "en"
@@ -621,14 +660,15 @@ class GeminiAdapter(ConversationLLM):
             ),
             max_output_tokens=300
         )
-        response = self.client.models.generate_content(
+        response = await asyncio.to_thread(
+            self.client.models.generate_content,
             model="gemini-2.5-pro",
             contents=f"Dashboard Data: {json.dumps(data)}",
             config=config
         )
         return response.text.strip()
 
-    def completion(
+    async def completion(
         self,
         system_prompt: str,
         user_prompt: str,
@@ -639,7 +679,8 @@ class GeminiAdapter(ConversationLLM):
             system_instruction=system_prompt,
             max_output_tokens=max_tokens
         )
-        response = self.client.models.generate_content(
+        response = await asyncio.to_thread(
+            self.client.models.generate_content,
             model="gemini-2.5-pro",
             contents=user_prompt,
             config=config
@@ -654,7 +695,7 @@ class GeminiAdapter(ConversationLLM):
 # ---------------------------------------------------------------------------
 
 class DeterministicAdapter(ConversationLLM):
-    def run_conversation(
+    async def run_conversation(
         self,
         message: str,
         history: list[dict],
@@ -697,7 +738,7 @@ class DeterministicAdapter(ConversationLLM):
             intent=ConversationIntent.INVESTIGATE
         )
 
-    def format_findings(
+    async def format_findings(
         self,
         query: str,
         findings: list[dict],
@@ -709,7 +750,7 @@ class DeterministicAdapter(ConversationLLM):
         # ChiefAgent.synthesis_node returns narrative="", so format_findings generates the layout
         return _format_response_template(query, "", findings, language=language)
 
-    def format_analytics(
+    async def format_analytics(
         self,
         data: dict,
         language: str = "en"
@@ -729,7 +770,7 @@ class DeterministicAdapter(ConversationLLM):
             festival=data.get("insights", {}).get("festival_concentration", [])
         )
 
-    def completion(
+    async def completion(
         self,
         system_prompt: str,
         user_prompt: str,

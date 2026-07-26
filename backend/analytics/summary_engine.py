@@ -22,6 +22,7 @@ set, not a tuned policy engine.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -238,7 +239,7 @@ def generate_dashboard_summary(session: Session, crime_type: Optional[str] = Non
     from backend.conversation_v2.llm import get_conversation_llm
     try:
         llm = get_conversation_llm()
-        executive_summary = llm.format_analytics(dashboard_data)
+        executive_summary = asyncio.run(llm.format_analytics(dashboard_data))
     except Exception:
         logger.warning("LLM analytics formatting failed, falling back to template", exc_info=True)
         executive_summary = _executive_summary(trend, type_distribution, top_hotspots, outbreaks, spikes, repeat_sites, festival)
