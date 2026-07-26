@@ -332,10 +332,10 @@ def main():
             datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ))
 
-    # 10. Conversations (V2 chat threads) (500)
+    # 10. Conversations (V2 chat threads) (10)
     conversations = []
     langs = ["en", "kn", "hi"]
-    for i in range(1, 501):
+    for i in range(1, 11):
         inv_id = random.choice([None, random.randint(1, 150)])
         nickname = f"Chat Thread #{i}"
         lang = random.choice(langs)
@@ -348,14 +348,12 @@ def main():
             datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ))
 
-    # 11. Conversation Turns (MessageV2 messages) (7000)
+    # 11. Conversation Turns (MessageV2 messages)
     messages = []
     msg_id = 1
     
-    # Pre-generate 7000 messages distributed across 500 conversations
-    # Roughly 14 messages per conversation on average
-    for conv_id in range(1, 501):
-        turns_count = random.randint(10, 18)
+    for conv_id in range(1, 11):
+        turns_count = random.randint(2, 4)
         for turn_idx in range(turns_count):
             # Message 1: User
             user_msg = f"Can you analyze the suspect or transaction links in conversation {conv_id} turn {turn_idx}?"
@@ -381,14 +379,6 @@ def main():
             reply = f"I have reviewed the profile details for Suspect {conv_id}. They are connected to three transaction flows."
             messages.append((msg_id, conv_id, "assistant", reply, None, None, None, None, ts))
             msg_id += 1
-
-            if msg_id >= 7001:
-                break
-        if msg_id >= 7001:
-            break
-
-    # Truncate to exactly 7000 if exceeded
-    messages = messages[:7000]
 
     # --- Write out SQL Insert Files ---
     print("Writing SQL files...")

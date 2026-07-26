@@ -96,6 +96,25 @@ def _serialize(row) -> dict:
     }
 
 
+def _serialize_v2_as_session(inv) -> dict:
+    return {
+        "id": inv.id,
+        "session_code": f"INV2-{inv.id:04d}",
+        "title": inv.title,
+        "fir_id": None,
+        "status": "open" if inv.status.value == "active" else inv.status.value,
+        "priority": "medium",
+        "opened_by_officer_id": inv.created_by_officer_id,
+        "owner_officer_id": inv.created_by_officer_id,
+        "opened_at": inv.created_at.isoformat() if inv.created_at else None,
+        "closed_at": None,
+        "reopened_at": None,
+        "archived_at": inv.archived_at.isoformat() if inv.archived_at else None,
+        "updated_at": inv.updated_at.isoformat() if inv.updated_at else None,
+        "notes": inv.description,
+    }
+
+
 @router.post("")
 def open_session(body: OpenSessionRequest, _ctx=Depends(RequirePermission(MANAGE_CASE))):
     session = SessionLocal()
@@ -131,6 +150,10 @@ def list_sessions(status: str | None = None, owner_officer_id: int | None = None
                 raise HTTPException(status_code=422, detail=f"Invalid status '{status}'.")
         svc = DatabaseService(session)
         rows = svc.list_sessions(status=status_enum, owner_officer_id=owner_officer_id)
+        if not rows:
+            from backend.database.models.investigation_v2 import InvestigationV2
+            v2_rows = session.query(InvestigationV2).order_by(InvestigationV2.updated_at.desc()).all()
+            return [_serialize_v2_as_session(r) for r in v2_rows]
         return [_serialize(r) for r in rows]
     except HTTPException:
         raise
@@ -148,6 +171,10 @@ def get_session(session_id: int, ctx=Depends(RequirePermission(VIEW_CASE))):
         svc = DatabaseService(session)
         row = svc.get_session(session_id)
         if row is None:
+            from backend.database.models.investigation_v2 import InvestigationV2
+            inv = session.get(InvestigationV2, session_id)
+            if inv is not None:
+                return _serialize_v2_as_session(inv)
             raise HTTPException(status_code=404, detail="Session not found.")
         from backend.security import audit as security_audit
         from backend.database.models import AuditAction

@@ -121,12 +121,14 @@ def list_investigations(
     db = SessionLocal()
     try:
         query = db.query(InvestigationV2)
-        if status:
-            try:
-                status_enum = InvestigationV2Status(status.lower())
-                query = query.filter(InvestigationV2.status == status_enum)
-            except ValueError:
-                raise HTTPException(status_code=422, detail=f"Invalid status '{status}'.")
+        if status and status.strip():
+            clean_status = status.strip().lower()
+            if clean_status != "all":
+                try:
+                    status_enum = InvestigationV2Status(clean_status)
+                    query = query.filter(InvestigationV2.status == status_enum)
+                except ValueError:
+                    raise HTTPException(status_code=422, detail=f"Invalid status '{status}'.")
         else:
             # Exclude archived by default unless requested
             query = query.filter(InvestigationV2.status != InvestigationV2Status.ARCHIVED)

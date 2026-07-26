@@ -125,7 +125,9 @@ app.include_router(collaboration_router)
 
 # Conversation V2 — new, additive.
 app.include_router(investigations_v2_router)
+app.include_router(investigations_v2_router, prefix="/api")
 app.include_router(conversations_v2_router)
+app.include_router(conversations_v2_router, prefix="/api")
 
 # Stage G1 (Criminology-Based Offender Profiling Engine) — new, additive.
 # Deterministic per-person dossier (Requirement 5): read-only, computed

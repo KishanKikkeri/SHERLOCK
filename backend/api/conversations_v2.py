@@ -407,6 +407,8 @@ async def post_stream(
     if not row or row.is_deleted:
         raise HTTPException(status_code=404, detail="Conversation not found.")
 
+
+
     async def event_generator():
         stream_db = SessionLocal()
         try:
