@@ -13,12 +13,12 @@ class Weapon(Base):
     __tablename__ = "weapons"
 
     id = Column(Integer, primary_key=True)
-    weapon_type = Column(Enum(WeaponType), nullable=False)
+    weapon_type = Column(Enum(WeaponType, values_callable=lambda x: [e.value for e in x]), nullable=False)
     description = Column(String, nullable=True)
     serial_number = Column(String, nullable=True)
     used_in_fir_id = Column(Integer, ForeignKey("firs.id"), nullable=True, index=True)
     recovered_from_person_id = Column(Integer, ForeignKey("persons.id"), nullable=True, index=True)
-    status = Column(Enum(PropertyStatus), nullable=False, default=PropertyStatus.SEIZED)
+    status = Column(Enum(PropertyStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=PropertyStatus.SEIZED)
 
     used_in_fir = relationship("FIR")
     recovered_from_person = relationship("Person")

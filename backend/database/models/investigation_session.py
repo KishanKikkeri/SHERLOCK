@@ -36,8 +36,8 @@ class InvestigationSession(Base):
     fir_id = Column(Integer, ForeignKey("firs.id"), nullable=True, index=True)  # nullable: a session can be opened before a FIR number exists
     title = Column(String, nullable=False)
 
-    status = Column(Enum(InvestigationSessionStatus), nullable=False, default=InvestigationSessionStatus.OPEN)
-    priority = Column(Enum(InvestigationPriority), nullable=False, default=InvestigationPriority.MEDIUM)
+    status = Column(Enum(InvestigationSessionStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=InvestigationSessionStatus.OPEN)
+    priority = Column(Enum(InvestigationPriority, values_callable=lambda x: [e.value for e in x]), nullable=False, default=InvestigationPriority.MEDIUM)
 
     opened_by_officer_id = Column(Integer, ForeignKey("officers.id"), nullable=True, index=True)
     owner_officer_id = Column(Integer, ForeignKey("officers.id"), nullable=True, index=True)

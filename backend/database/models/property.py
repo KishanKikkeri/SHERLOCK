@@ -25,7 +25,7 @@ class Property(Base):
     description = Column(String, nullable=False)
     category = Column(String, nullable=True)  # e.g. cash, jewellery, electronics, documents
     estimated_value = Column(Float, nullable=True)
-    status = Column(Enum(PropertyStatus), nullable=False, default=PropertyStatus.SEIZED)
+    status = Column(Enum(PropertyStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=PropertyStatus.SEIZED)
     seized_location_id = Column(Integer, ForeignKey("locations.id"), nullable=True, index=True)
     recovered_from_person_id = Column(Integer, ForeignKey("persons.id"), nullable=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)

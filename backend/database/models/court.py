@@ -13,7 +13,7 @@ class Court(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
-    level = Column(Enum(CourtLevel), nullable=False)
+    level = Column(Enum(CourtLevel, values_callable=lambda x: [e.value for e in x]), nullable=False)
     district = Column(String, nullable=False)
 
     chargesheets = relationship("ChargeSheet", back_populates="court")

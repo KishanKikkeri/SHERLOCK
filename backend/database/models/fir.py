@@ -28,7 +28,7 @@ class FIR(Base):
     id = Column(Integer, primary_key=True)
     crime_id = Column(Integer, ForeignKey("crimes.id"), nullable=False, unique=True)
     fir_number = Column(String, nullable=False, unique=True)
-    status = Column(Enum(FIRStatus), nullable=False, default=FIRStatus.OPEN)
+    status = Column(Enum(FIRStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=FIRStatus.OPEN)
     investigating_officer_id = Column(Integer, ForeignKey("officers.id"), nullable=True, index=True)
     filed_date = Column(DateTime, nullable=False, default=datetime.utcnow)
 

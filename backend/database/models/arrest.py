@@ -19,7 +19,7 @@ class Arrest(Base):
     arresting_officer_id = Column(Integer, ForeignKey("officers.id"), nullable=True, index=True)
     location_id = Column(Integer, ForeignKey("locations.id"), nullable=True)
     arrest_date = Column(DateTime, nullable=False, default=datetime.utcnow)
-    status = Column(Enum(ArrestStatus), nullable=False, default=ArrestStatus.ARRESTED)
+    status = Column(Enum(ArrestStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=ArrestStatus.ARRESTED)
 
     person = relationship("Person")
     fir = relationship("FIR", back_populates="arrests")

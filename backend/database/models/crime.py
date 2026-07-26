@@ -21,7 +21,7 @@ class Crime(Base):
     __tablename__ = "crimes"
 
     id = Column(Integer, primary_key=True)
-    type = Column(Enum(CrimeType), nullable=False, index=True)
+    type = Column(Enum(CrimeType, values_callable=lambda x: [e.value for e in x]), nullable=False, index=True)
     timestamp = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     location_id = Column(Integer, ForeignKey("locations.id"), nullable=False, index=True)
     modus_operandi = Column(String, nullable=True)

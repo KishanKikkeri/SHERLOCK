@@ -84,7 +84,7 @@ COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 # -----------------------------------------------------------------------------
 
 COPY reset_database.sql ./
-RUN python -c "import sqlite3; conn = sqlite3.connect('sherlock.db'); conn.executescript(open('reset_database.sql', 'r', encoding='utf-8').read()); conn.close()" && rm reset_database.sql
+RUN python -c "import sqlite3; conn = sqlite3.connect('sherlock.db'); conn.executescript(open('reset_database.sql', 'r', encoding='utf-8').read()); conn.close()"
 
 COPY demo_investigation.py ./
 COPY demo_graph_queries.py ./

@@ -18,7 +18,7 @@ class ChargeSheet(Base):
     court_id = Column(Integer, ForeignKey("courts.id"), nullable=True, index=True)
     filing_officer_id = Column(Integer, ForeignKey("officers.id"), nullable=True, index=True)
     filed_date = Column(DateTime, nullable=False, default=datetime.utcnow)
-    status = Column(Enum(ChargeSheetStatus), nullable=False, default=ChargeSheetStatus.PENDING)
+    status = Column(Enum(ChargeSheetStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=ChargeSheetStatus.PENDING)
 
     fir = relationship("FIR", back_populates="chargesheets")
     court = relationship("Court", back_populates="chargesheets")

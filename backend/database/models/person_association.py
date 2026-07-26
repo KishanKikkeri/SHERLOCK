@@ -20,7 +20,7 @@ class PersonAssociation(Base):
     id = Column(Integer, primary_key=True)
     person_a_id = Column(Integer, ForeignKey("persons.id"), nullable=False, index=True)
     person_b_id = Column(Integer, ForeignKey("persons.id"), nullable=False, index=True)
-    relation_type = Column(Enum(RelationType), nullable=False)
+    relation_type = Column(Enum(RelationType, values_callable=lambda x: [e.value for e in x]), nullable=False)
     strength = Column(Float, nullable=False, default=0.5)
 
     person_a = relationship("Person", foreign_keys=[person_a_id])

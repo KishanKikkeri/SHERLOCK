@@ -33,7 +33,7 @@ class InvestigationV2(Base):
     description = Column(Text, nullable=True)
 
     status = Column(
-        Enum(InvestigationV2Status),
+        Enum(InvestigationV2Status, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=InvestigationV2Status.ACTIVE,
     )

@@ -21,7 +21,7 @@ class Person(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
-    gender = Column(Enum(Gender), nullable=False)
+    gender = Column(Enum(Gender, values_callable=lambda x: [e.value for e in x]), nullable=False)
     age = Column(Integer, nullable=False)
     occupation = Column(String, nullable=True)
     home_location_id = Column(Integer, ForeignKey("locations.id"), nullable=True, index=True)

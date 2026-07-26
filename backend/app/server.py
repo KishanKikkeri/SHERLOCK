@@ -29,6 +29,29 @@ logger = logging.getLogger(__name__)
 # Ensure tables exist on first start
 Base.metadata.create_all(engine)
 
+def _ensure_db_seeded():
+    try:
+        db_path = getattr(engine.url, "database", None)
+        if db_path and os.path.exists(db_path):
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
+            try:
+                person_count = c.execute("SELECT COUNT(*) FROM persons").fetchone()[0]
+            except sqlite3.OperationalError:
+                person_count = 0
+
+            if person_count == 0:
+                logger.info("Database is unpopulated. Populating seeded dataset from reset_database.sql...")
+                reset_sql_path = Path(__file__).parent.parent.parent / "reset_database.sql"
+                if reset_sql_path.exists():
+                    c.executescript(reset_sql_path.read_text(encoding="utf-8"))
+                    logger.info("Database successfully auto-seeded.")
+            conn.close()
+    except Exception as e:
+        logger.warning("Auto-seed check failed: %s", e)
+
+_ensure_db_seeded()
+
 # NOTE: this must point at the *built* output (dist/), not the frontend/
 # source tree — frontend/index.html is Vite's dev-mode entry (references
 # /src/main.tsx directly, which only works under `vite dev`'s transform).

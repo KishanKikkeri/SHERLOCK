@@ -25,7 +25,7 @@ class Officer(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
     badge_number = Column(String, nullable=False, unique=True)
-    rank = Column(Enum(OfficerRank), nullable=False)
+    rank = Column(Enum(OfficerRank, values_callable=lambda x: [e.value for e in x]), nullable=False)
     posting_station = Column(String, nullable=True)
     contact_number = Column(String, nullable=True)
 

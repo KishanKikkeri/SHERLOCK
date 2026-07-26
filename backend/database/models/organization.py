@@ -24,7 +24,7 @@ class Organization(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
-    org_type = Column(Enum(OrganizationType), nullable=False)
+    org_type = Column(Enum(OrganizationType, values_callable=lambda x: [e.value for e in x]), nullable=False)
     registration_number = Column(String, nullable=True)
     address = Column(String, nullable=True)
 
