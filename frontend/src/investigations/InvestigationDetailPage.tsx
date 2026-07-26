@@ -1,6 +1,7 @@
+import { useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Construction, LayoutDashboard, Network, Lightbulb, Mic, Clock, FileText, CircleUser as UserCircle } from 'lucide-react'
-import { Card, CardBody } from '@/components/ui/Card'
+import { ArrowLeft, LayoutDashboard, Network, Lightbulb, Mic, Clock, FileText, CircleUser as UserCircle } from 'lucide-react'
+import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -11,6 +12,10 @@ import { PresenceIndicator } from '@/collaboration/PresenceIndicator'
 import { SessionActivityFeed } from '@/collaboration/SessionActivityFeed'
 import { DiscussionReplay } from '@/collaboration/DiscussionReplay'
 import { useLanguage } from '@/providers/LanguageProvider'
+import { ConversationV2Provider } from '@/conversation/ConversationProviderV2'
+import { ChatAreaV2 } from '@/conversation/ChatAreaV2'
+import { ChatComposerV2 } from '@/conversation/ChatComposerV2'
+import { useConversationV2Store } from '@/conversation/storeV2'
 
 /**
  * Investigation detail — mission-control header, not a form.
@@ -23,6 +28,22 @@ export function InvestigationDetailPage() {
   const sessionId = id ? Number(id) : undefined
   const { data: session, isLoading } = useSession(sessionId)
   const { t } = useLanguage()
+
+  useEffect(() => {
+    if (sessionId === undefined) return
+    // Scope the shared V2 conversation store to this investigation while
+    // the page is mounted. Capture whatever workspace was active before
+    // (e.g. "All Cases", or a different investigation the user had picked
+    // on the main Conversation page) and restore it on unmount, rather
+    // than leaving this investigation pinned as the active workspace
+    // indefinitely — that unconditional overwrite-with-no-reset was the
+    // actual "persistent memory" bug, not the panel itself.
+    const previousInvestigationId = useConversationV2Store.getState().activeInvestigationId
+    useConversationV2Store.getState().setInvestigationId(sessionId)
+    return () => {
+      useConversationV2Store.getState().setInvestigationId(previousInvestigationId)
+    }
+  }, [sessionId])
 
   return (
     <div className="flex flex-col gap-4">
@@ -108,23 +129,18 @@ export function InvestigationDetailPage() {
             <DiscussionReplay sessionId={sessionId} />
           </div>
 
-          {/* Placeholder for live conversation */}
-          <Card>
-            <CardBody className="flex flex-col items-center gap-2 py-8 text-center">
-              <Construction className="h-6 w-6 text-muted" aria-hidden />
-              <p className="text-sm font-medium text-text">
-                {t('investigations.conversation_panel_missing_title', "The live conversation panel isn't built yet")}
-              </p>
-              <p className="max-w-md text-xs text-muted">
-                {t(
-                  'investigations.conversation_panel_missing_description',
-                  "Board, graph, voice, findings, and this session's activity and discussion "
-                  + "history are all real and linked above. The one piece still missing is a live "
-                  + "WS-connected conversation panel — voice already covers most of what that would do.",
-                )}
-              </p>
-            </CardBody>
-          </Card>
+          {/* Live conversation workspace */}
+          <div className="flex flex-col gap-2">
+            <h2 className="text-base font-semibold text-text">
+              {t('investigations.live_conversation_title', 'Live Investigation Conversation')}
+            </h2>
+            <Card className="flex flex-col overflow-hidden h-[500px]">
+              <ConversationV2Provider>
+                <ChatAreaV2 />
+                <ChatComposerV2 />
+              </ConversationV2Provider>
+            </Card>
+          </div>
         </>
       )}
     </div>

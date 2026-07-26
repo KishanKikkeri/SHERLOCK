@@ -82,7 +82,15 @@ function MessageBubble({ message, onSend }: { message: MessageV2; onSend: (text:
               : 'bg-surface border border-border text-text'
           }`}
         >
-          {message.content && <p className="whitespace-pre-wrap">{message.content}</p>}
+          {!isUser && message.metadata?.pending ? (
+            <span className="inline-flex items-center gap-1.5 text-muted">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current [animation-delay:150ms]" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current [animation-delay:300ms]" />
+            </span>
+          ) : (
+            message.content && <p className="whitespace-pre-wrap">{message.content}</p>
+          )}
 
           {/* Render tool invocation call in the assistant bubble */}
           {message.tool_calls && message.tool_calls.map((tc, idx) => (

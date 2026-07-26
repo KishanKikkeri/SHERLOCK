@@ -78,9 +78,9 @@ export function useConversationV2() {
       const controller = new AbortController()
       abortRef.current = controller
 
+      let finalReply = ''
+      let streamErrored = false
       try {
-        let finalReply = ''
-        let streamErrored = false
         await streamConversationMessageV2(
           conversationId,
           trimmed,
@@ -162,7 +162,18 @@ export function useConversationV2() {
         })
       } finally {
         store.setStreaming(false)
-        queryClient.invalidateQueries({ queryKey: messagesKey })
+        // Only refetch messages from the server on a genuine success.
+        // On error / no-reply, the assistant turn was very likely never
+        // persisted server-side (the failure happened before
+        // `store_message` for it ran), so refetching here would
+        // silently overwrite the friendly message we just wrote above
+        // with a server list that's missing that turn entirely —
+        // reproducing the exact "disappearing chat" bug this hook
+        // otherwise fixes. The local cache write is already the best
+        // available state in that case, so leave it alone.
+        if (finalReply && !streamErrored) {
+          queryClient.invalidateQueries({ queryKey: messagesKey })
+        }
         queryClient.invalidateQueries({ queryKey: ['v2', 'conversations'] })
       }
     },
