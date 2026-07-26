@@ -17,12 +17,15 @@ def test_voice_command_and_text_conversation_share_a_session(api_client, db_sess
     person = db_session.query(Person).first()
     assert person is not None
 
-    typed = api_client.post("/conversation/message", json={"message": f"Tell me about {person.name}"})
-    assert typed.status_code == 200
-    session_id = typed.json()["session_id"]
-    assert session_id is not None
+    # Create conversation first in V2
+    conv_res = api_client.post("/v2/conversations", json={"nickname": "Test Chat"})
+    assert conv_res.status_code == 200
+    conv_id = conv_res.json()["id"]
 
-    spoken = api_client.post("/voice/command", json={"transcript": "Summarize this", "session_id": session_id})
+    typed = api_client.post(f"/v2/conversations/{conv_id}/messages", json={"message": f"Tell me about {person.name}"})
+    assert typed.status_code == 200
+
+    spoken = api_client.post("/voice/command", json={"transcript": "Summarize this", "session_id": conv_id})
     assert spoken.status_code == 200
     body = spoken.json()
     # Reached ConversationManager's SUMMARIZE intent (not the generic
@@ -30,7 +33,7 @@ def test_voice_command_and_text_conversation_share_a_session(api_client, db_sess
     # routing through the same intent classifier /conversation/message
     # uses, on the same session's memory.
     assert body["intent"] == "summarize"
-    assert body["session_id"] == session_id
+    assert body["session_id"] == conv_id
 
 
 def test_voice_command_meta_intents_reachable(api_client):

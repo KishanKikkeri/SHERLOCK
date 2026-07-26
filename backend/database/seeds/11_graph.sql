@@ -1,0 +1,2 @@
+-- Graph State metadata triggers or static states (empty or comments for SQLite)
+-- Fully derived at query time by the graph builders over the AER schemas.

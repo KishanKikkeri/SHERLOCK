@@ -262,18 +262,45 @@ async def handle_network_graph(
 async def handle_generate_pdf(ctx: ToolContext, *, session_id: int | None = None) -> dict:
     """Export investigation report as PDF."""
     from backend.database.config import SessionLocal
+    from backend.database.models.conversation_v2 import ConversationV2, MessageV2
+    from backend.reporting.pdf_export import generate_investigation_pdf
     db = SessionLocal()
     try:
         sid = session_id or ctx.conversation_id
-        from backend.conversation.orchestrator import ConversationOrchestrator
-        orchestrator = ConversationOrchestrator(db)
-        pdf_bytes, warnings = orchestrator.export_last_report_as_pdf(
-            sid, language=ctx.language
+        if not sid:
+            return {"status": "error", "message": "No active conversation session found."}
+        row = db.get(ConversationV2, sid)
+        if not row or row.is_deleted:
+            return {"status": "error", "message": "Conversation not found."}
+        msgs = (
+            db.query(MessageV2)
+            .filter(MessageV2.conversation_id == sid)
+            .order_by(MessageV2.created_at.asc())
+            .all()
+        )
+        if not msgs:
+            return {"status": "error", "message": "No messages in this conversation to export."}
+        findings = []
+        for m in msgs:
+            if m.role == "assistant" and m.content:
+                findings.append({
+                    "title": f"Response {m.created_at.strftime('%Y-%m-%d %H:%M')}",
+                    "description": m.content,
+                    "confidence": 1.0,
+                    "evidence_refs": [],
+                })
+        pdf_bytes = generate_investigation_pdf(
+            query=f"Conversation V2 Export — '{row.nickname}'",
+            narrative="This document contains the archived discussion and evidence records from the conversation.",
+            findings=findings,
+            rejected_findings=[],
+            evidence_log=[],
+            language=row.language,
         )
         return {
             "status": "success",
             "pdf_length": len(pdf_bytes) if pdf_bytes else 0,
-            "warnings": warnings,
+            "warnings": [],
         }
     except Exception as e:
         logger.exception("generate_pdf tool failed")

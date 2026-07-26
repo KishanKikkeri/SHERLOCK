@@ -1,0 +1,1 @@
+-- Static Analytics triggers or pre-aggregated snapshots (empty or comments for SQLite)

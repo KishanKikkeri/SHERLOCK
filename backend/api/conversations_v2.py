@@ -150,6 +150,34 @@ def list_conversations(
         db.close()
 
 
+@router.get("/cases")
+def list_cases(
+    search: Optional[str] = None,
+    _ctx: AuthContext = Depends(RequirePermission(VIEW_CASE)),
+):
+    """List and search case records or FIRs."""
+    db = SessionLocal()
+    try:
+        from backend.database.service import DatabaseService
+        svc = DatabaseService(db)
+        cases = svc.list_cases(search=search)
+        res = []
+        for c in cases:
+            crime_type = c.crime.type if c.crime else None
+            district = c.crime.location.district if c.crime and c.crime.location else None
+            res.append({
+                "fir_id": c.id,
+                "fir_number": c.fir_number,
+                "status": c.status.value if hasattr(c.status, "value") else str(c.status),
+                "crime_type": crime_type.value if hasattr(crime_type, "value") else str(crime_type) if crime_type else None,
+                "district": district,
+                "filed_date": c.filed_date.isoformat() if c.filed_date else None,
+            })
+        return res
+    finally:
+        db.close()
+
+
 @router.get("/{id}")
 def get_conversation(
     id: int,
@@ -477,3 +505,4 @@ def export_pdf(
         raise HTTPException(status_code=500, detail="PDF export failed.")
     finally:
         db.close()
+

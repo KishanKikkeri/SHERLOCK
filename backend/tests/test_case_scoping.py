@@ -14,7 +14,7 @@ from backend.database.models import FIR
 
 
 def test_list_cases_endpoint_returns_seeded_firs(api_client, db_session):
-    resp = api_client.get("/conversation/cases")
+    resp = api_client.get("/v2/conversations/cases")
     assert resp.status_code == 200
     cases = resp.json()
     assert isinstance(cases, list)
@@ -30,7 +30,7 @@ def test_list_cases_endpoint_returns_seeded_firs(api_client, db_session):
 
 def test_list_cases_search_filters_by_fir_number(api_client, db_session):
     any_fir = db_session.query(FIR).first()
-    resp = api_client.get(f"/conversation/cases?search={any_fir.fir_number}")
+    resp = api_client.get(f"/v2/conversations/cases?search={any_fir.fir_number}")
     assert resp.status_code == 200
     cases = resp.json()
     assert any(c["fir_number"] == any_fir.fir_number for c in cases)

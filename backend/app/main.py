@@ -29,7 +29,7 @@ from slowapi import _rate_limit_exceeded_handler
 from backend.api.investigation_stream import stream_investigation, run_investigation_once
 from backend.api.sessions import router as sessions_router
 from backend.api.conversation import router as conversation_router
-from backend.api.conversation_chat import router as conversation_chat_router
+# Removed deprecated conversation_chat_router
 from backend.api.investigations_v2 import router as investigations_v2_router
 from backend.api.conversations_v2 import router as conversations_v2_router
 from backend.api.board import router as board_router
@@ -121,10 +121,7 @@ app.include_router(voice_router)
 app.include_router(discussion_router)
 app.include_router(collaboration_router)
 
-# Stage F2 (Conversation Intelligence System) — new, additive. Unifies
-# chat + voice + evidence + reporting behind one /conversation/* surface;
-# does not change or replace any router above.
-app.include_router(conversation_chat_router)
+# Deprecated Stage F2 conversation_chat_router removed
 
 # Conversation V2 — new, additive.
 app.include_router(investigations_v2_router)

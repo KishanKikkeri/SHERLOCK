@@ -282,29 +282,37 @@ class VoiceCommandRouter:
         return VoiceCommandResult("vehicle_owner", spoken, session_id=session_id)
 
     async def _investigate(self, session_id: int | None, text: str) -> VoiceCommandResult:
-        # Priority 17 — same ConversationManager text uses, not a
-        # parallel call to run_investigation_once. Free-text voice input
-        # ("show all witnesses", "summarize this", "who is Ravi Kumar")
-        # now gets identical intent classification (investigate vs.
-        # summarize/clear-history/export) as the exact same words typed
-        # into the Conversation screen would, not just the investigation
-        # pipeline's default path.
-        from backend.conversation.orchestrator import ConversationOrchestrator
-        orchestrator = ConversationOrchestrator(self.session)
-        result = await orchestrator.handle_message(session_id, text, language=self.language)
-        final_report = result.get("final_report")
-        narrative = result.get("reply") or "I didn't find anything on that."
-        response_language = (final_report or {}).get("narrative_language", self.language)
-        data = {"final_report": final_report} if final_report else {}
-        if final_report:
-            # `final_report` is kept verbatim (all validated + rejected
-            # findings, full narrative) for a "Show Agent Trace" view.
-            # `executive_report` is the structured, ranked, counted
-            # summary the Analytics cards render by default — see
-            # backend/intelligence/executive_summary.py.
-            data["executive_report"] = build_executive_report(final_report, language=response_language)
+        # Priority 17 — same Conversation V2 LLMOrchestrator text uses.
+        from backend.conversation_v2.llm import classify_intent
+        classified = classify_intent(text, has_context=(session_id is not None))
+        if classified.intent in ("clear_history", "summarize", "export_pdf"):
+            spoken = f"Executing {classified.intent.replace('_', ' ')} command."
+            if classified.intent == "clear_history" and session_id is not None:
+                from backend.database.models.conversation_v2 import MessageV2
+                self.session.query(MessageV2).filter(MessageV2.conversation_id == session_id).delete()
+                self.session.commit()
+                spoken = "Conversation history cleared."
+            elif classified.intent == "summarize" and session_id is not None:
+                spoken = "Here is the summary of the conversation so far."
+            return VoiceCommandResult(
+                classified.intent.value, spoken, session_id=session_id
+            )
+
+        from backend.conversation_v2.orchestrator import LLMOrchestrator
+        orchestrator = LLMOrchestrator(self.session)
+        response = await orchestrator.handle_message(
+            conversation_id=session_id,
+            message=text,
+            language=self.language
+        )
+        narrative = response.reply or "I didn't find anything on that."
+        data = {
+            "conversation_id": response.conversation_id,
+            "citations": response.citations,
+            "suggested_questions": response.suggested_questions,
+        }
         return VoiceCommandResult(
-            result.get("intent", "investigate"), _truncate(narrative),
-            data=data, session_id=result.get("session_id", session_id),
-            language=response_language,
+            "investigate", _truncate(narrative),
+            data=data, session_id=response.conversation_id,
+            language=self.language,
         )
