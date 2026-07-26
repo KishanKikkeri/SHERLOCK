@@ -417,15 +417,20 @@ async def post_stream(
                 language=row.language,
                 investigation_id=row.investigation_id,
             ):
-                yield f"data: {json.dumps({
-                    'event_type': event.event_type,
-                    'message': event.message,
-                    'agent': event.agent,
-                    'data': event.data,
-                })}\n\n"
+                payload_data = {
+                    "event_type": event.event_type,
+                    "message": event.message,
+                    "agent": event.agent,
+                    "data": event.data,
+                }
+                yield f"data: {json.dumps(payload_data)}\n\n"
         except Exception as e:
             logger.exception("Streaming event generation failed")
-            yield f"data: {json.dumps({'event_type': 'error', 'message': str(e)})}\n\n"
+            error_payload = {
+                "event_type": "error",
+                "message": str(e),
+            }
+            yield f"data: {json.dumps(error_payload)}\n\n"
         finally:
             stream_db.close()
 
