@@ -140,6 +140,20 @@ class InvestigationPriority(str, enum.Enum):
 
 
 # ---------------------------------------------------------------------------
+# Conversation V2 — Investigation/Conversation separation (new, additive)
+# ---------------------------------------------------------------------------
+
+class InvestigationV2Status(str, enum.Enum):
+    """Lifecycle state of a V2 investigation workspace. Simpler than the
+    old InvestigationSessionStatus — an investigation is active, closed,
+    or archived. No 'reopened' state; closing and re-activating just
+    toggles between ACTIVE and CLOSED."""
+    ACTIVE = "active"
+    CLOSED = "closed"
+    ARCHIVED = "archived"
+
+
+# ---------------------------------------------------------------------------
 # Stage C6 — Collaboration (new, additive; nothing above is touched)
 # ---------------------------------------------------------------------------
 

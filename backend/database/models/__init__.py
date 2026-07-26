@@ -42,6 +42,7 @@ from backend.database.models.enums import (  # noqa: F401
     OfficerRank, CourtLevel, PropertyStatus, ArrestStatus,
     ChargeSheetStatus, OrganizationType, WeaponType,
     InvestigationSessionStatus, InvestigationPriority,
+    InvestigationV2Status,
     ReviewStatus, NotificationType, CommentTargetType, BoardObjectType, PresenceStatus,
     SystemRole, AuditAction,
 )
@@ -86,6 +87,10 @@ from backend.database.models.investigation_session import (  # noqa: F401
 )
 from backend.database.models.conversation import ConversationTurn  # noqa: F401
 
+# Conversation V2 — Investigation/Conversation separation (new, additive)
+from backend.database.models.investigation_v2 import InvestigationV2  # noqa: F401
+from backend.database.models.conversation_v2 import ConversationV2, MessageV2  # noqa: F401
+
 # Stage C4 — AI Discussion Mode (new, additive)
 from backend.database.models.discussion import DiscussionRecord  # noqa: F401
 
@@ -111,6 +116,7 @@ __all__ = [
     "OfficerRank", "CourtLevel", "PropertyStatus", "ArrestStatus",
     "ChargeSheetStatus", "OrganizationType", "WeaponType",
     "InvestigationSessionStatus", "InvestigationPriority",
+    "InvestigationV2Status",
     "ReviewStatus", "NotificationType", "CommentTargetType", "BoardObjectType", "PresenceStatus",
     "SystemRole", "AuditAction",
     # Legacy-compatible symbols (imported by existing agents/graph builders/datasets)
@@ -130,4 +136,6 @@ __all__ = [
     "User", "Role", "UserRole", "RefreshToken",
     # Stage E3 — new, additive
     "AuditLog",
+    # Conversation V2 — new, additive
+    "InvestigationV2", "ConversationV2", "MessageV2",
 ]

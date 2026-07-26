@@ -1,178 +1,147 @@
-"""
-SHERLOCK — Stage F3: Conversational Intelligence — V2 Refactor Unit Tests.
-
-Verifies:
-- Tool selection and budgeting by the planner
-- Context-aware entity resolution and memory reuse
-- Parallel tool execution in ToolGateway
-- Tool result caching
-- Direct native Kannada support (without post-translation)
-- Error handling and normalization
-"""
-
-from __future__ import annotations
-
 import json
 import pytest
-from unittest.mock import MagicMock, patch
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
-from backend.conversation.planner import ConversationPlanner, PlannedPlan
-from backend.conversation.conversation_agent import ConversationAgent
-from backend.conversation.tool_gateway import ToolGateway
-from backend.conversation.orchestrator import ConversationOrchestrator
-from backend.conversation.router import ConversationIntent
-from backend.conversation.memory import ConversationStateMemory
-from backend.database.models import InvestigationSession
-
-
-class MockLLM:
-    def __init__(self, completion_response: str):
-        self.completion_response = completion_response
-        self.called_with = []
-
-    def completion(self, system_prompt: str, user_prompt: str, max_tokens: int = 400) -> str:
-        self.called_with.append((system_prompt, user_prompt))
-        return self.completion_response
+from backend.database.config import Base
+from backend.database.models.enums import InvestigationV2Status
+from backend.database.models.investigation_v2 import InvestigationV2
+from backend.database.models.conversation_v2 import ConversationV2, MessageV2
+from backend.tools.registry import ToolRegistry, ToolDefinition, ToolContext
+from backend.conversation_v2.orchestrator import LLMOrchestrator
+from backend.conversation_v2.prompts import build_system_prompt
+from backend.conversation_v2.llm import DeterministicAdapter
 
 
-def test_planner_tool_budgeting(db_session):
-    """Planner parses context and decides intent and tool-calling budget."""
-    mock_json = {
-        "resolved_query": "Tell me about suspect Ravi Kumar",
-        "intent": "investigate",
-        "ambiguity_detected": False,
-        "clarification_question": None,
-        "tools_to_call": [
-            {"name": "search_person", "arguments": {"name": "Ravi Kumar"}}
-        ]
-    }
-    mock_llm = MockLLM(json.dumps(mock_json))
-
-    planner = ConversationPlanner(db_session)
-    planner.llm = mock_llm
-
-    context = {
-        "session_id": 1,
-        "current_case_id": None,
-        "active_entities": [],
-        "last_findings": [],
-        "previous_messages": []
-    }
-
-    plan = planner.plan("tell me about Ravi", context)
-    assert plan.intent == ConversationIntent.INVESTIGATE
-    assert plan.resolved_query == "Tell me about suspect Ravi Kumar"
-    assert len(plan.tools_to_call) == 1
-    assert plan.tools_to_call[0]["name"] == "search_person"
-    assert plan.tools_to_call[0]["arguments"]["name"] == "Ravi Kumar"
-
-
-def test_planner_ambiguity_detection(db_session):
-    """Planner detects ambiguous query and sets clarification question."""
-    mock_json = {
-        "resolved_query": "Tell me about him",
-        "intent": "investigate",
-        "ambiguity_detected": True,
-        "clarification_question": "Are you referring to suspect Ravi Kumar or Manoj Kumar?",
-        "tools_to_call": []
-    }
-    mock_llm = MockLLM(json.dumps(mock_json))
-
-    planner = ConversationPlanner(db_session)
-    planner.llm = mock_llm
-
-    context = {
-        "session_id": 1,
-        "current_case_id": None,
-        "active_entities": [{"name": "Ravi Kumar"}, {"name": "Manoj Kumar"}],
-        "last_findings": [],
-        "previous_messages": []
-    }
-
-    plan = planner.plan("tell me about him", context)
-    assert plan.ambiguity_detected is True
-    assert plan.clarification_question == "Are you referring to suspect Ravi Kumar or Manoj Kumar?"
-    assert len(plan.tools_to_call) == 0
-
-
-@pytest.mark.anyio
-async def test_tool_gateway_caching(db_session):
-    """Verify ToolGateway caches tool calls to prevent redundant database runs."""
-    gateway = ToolGateway(db_session)
+@pytest.fixture(name="db_session")
+def fixture_db_session():
+    """Create a temporary in-memory SQLite database for testing."""
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    Base.metadata.create_all(bind=engine)
     
-    with patch("backend.conversation.tools.call_tool") as mock_call:
-        mock_call.return_value = {"status": "success", "findings": [{"id": 1, "text": "Crime record"}]}
-        
-        # First call: executes tool
-        res1 = await gateway.execute_tool("search_person", {"name": "Ravi"}, session_id=1)
-        # Second call with same arguments: should use cache
-        res2 = await gateway.execute_tool("search_person", {"name": "Ravi"}, session_id=1)
-        
-        assert res1 == res2
-        assert mock_call.call_count == 1
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
-@pytest.mark.anyio
-async def test_tool_gateway_parallel_execution(db_session):
-    """Verify ToolGateway executes independent tools concurrently."""
-    gateway = ToolGateway(db_session)
-    
-    with patch("backend.conversation.tools.call_tool") as mock_call:
-        mock_call.return_value = {"status": "success", "findings": []}
-        
-        tool_calls = [
-            {"name": "search_person", "arguments": {"name": "Ravi"}},
-            {"name": "financial_analysis", "arguments": {"account_number": "12345"}}
-        ]
-        
-        results = await gateway.execute_tools_parallel(tool_calls, session_id=1)
-        assert len(results) == 2
-        assert mock_call.call_count == 2
-
-
-def test_conversation_agent_native_kannada(db_session):
-    """Verify direct native Kannada generation without translation hooks."""
-    mock_llm = MockLLM("ರವಿ ಕುಮಾರ್ ಒಬ್ಬ ಶಂಕಿತ ಆರೋಪಿ.")
-    agent = ConversationAgent(db_session)
-    agent.llm = mock_llm
-
-    response = agent.generate_response(
-        message="tell me about Ravi",
-        history=[],
-        context={},
-        language="kn"
+def test_investigation_v2_crud(db_session):
+    # Create
+    inv = InvestigationV2(
+        title="Test Case Workspace",
+        description="Testing V2 workspace features",
+        selected_fir_ids_json=json.dumps([12, 15]),
     )
+    db_session.add(inv)
+    db_session.commit()
+    db_session.refresh(inv)
+    
+    assert inv.id is not None
+    assert inv.status == InvestigationV2Status.ACTIVE
+    assert json.loads(inv.selected_fir_ids_json) == [12, 15]
 
-    assert response == "ರವಿ ಕುಮಾರ್ ಒಬ್ಬ ಶಂಕಿತ ಆರೋಪಿ."
-    # Make sure prompt includes Kannada directive
-    sys_prompt = mock_llm.called_with[0][0]
-    assert "Kannada" in sys_prompt or "ಕನ್ನಡ" in sys_prompt
+    # Update
+    inv.title = "Updated Workspace"
+    db_session.commit()
+    assert db_session.get(InvestigationV2, inv.id).title == "Updated Workspace"
 
 
-@pytest.mark.anyio
-async def test_orchestrator_chitchat_no_tools(db_session):
-    """Verify orchestrator routes chitchat/greeting directly to LLM with no tool execution."""
-    session = InvestigationSession(session_code="TEST-SESS-99", title="Test Session")
-    db_session.add(session)
+def test_conversation_v2_crud(db_session):
+    # Create
+    conv = ConversationV2(
+        nickname="Test Chat",
+        language="kn",
+    )
+    db_session.add(conv)
+    db_session.commit()
+    db_session.refresh(conv)
+
+    assert conv.id is not None
+    assert conv.language == "kn"
+    assert conv.pinned is False
+
+    # Message posting
+    msg = MessageV2(
+        conversation_id=conv.id,
+        role="user",
+        content="Hello SHERLOCK",
+    )
+    db_session.add(msg)
     db_session.commit()
 
-    orchestrator = ConversationOrchestrator(db_session)
+    assert len(conv.messages) == 1
+    assert conv.messages[0].content == "Hello SHERLOCK"
+
+
+@pytest.mark.anyio
+async def test_tool_registry(db_session):
+    registry = ToolRegistry()
     
-    # Mock Planner to decide chitchat
-    mock_plan = PlannedPlan(
-        intent=ConversationIntent.CHITCHAT,
-        resolved_query="hello",
-        tools_to_call=[],
-        ambiguity_detected=False
+    async def mock_handler(ctx: ToolContext, query: str) -> dict:
+        return {"status": "ok", "results": [query]}
+
+    tool_def = ToolDefinition(
+        name="mock_tool",
+        description="A mock tool for testing",
+        parameters={
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        },
+        handler=mock_handler,
     )
-    orchestrator.planner.plan = MagicMock(return_value=mock_plan)
+    registry.register(tool_def)
     
-    # Mock Agent direct reply
-    orchestrator.agent.generate_response = MagicMock(return_value="Hello, how can I help you today?")
+    assert "mock_tool" in registry
+    assert len(registry) == 1
+
+    ctx = ToolContext(db=db_session)
+    res = await registry.execute("mock_tool", {"query": "test"}, ctx)
+    assert res == {"status": "ok", "results": ["test"]}
+
+
+@pytest.mark.anyio
+async def test_llm_orchestrator(db_session):
+    # Create mock tool registry
+    registry = ToolRegistry()
     
-    with patch.object(orchestrator.gateway, "execute_tools_parallel") as mock_exec:
-        result = await orchestrator.handle_message(session.id, "hello")
-        
-        assert result["reply"] == "Hello, how can I help you today?"
-        assert result["intent"] == "chitchat"
-        mock_exec.assert_not_called()
+    async def mock_search(ctx: ToolContext, name: str) -> dict:
+        return {"status": "success", "findings": [{"source": "mock", "title": f"Profile of {name}"}]}
+
+    registry.register(ToolDefinition(
+        name="search_person",
+        description="Search suspect",
+        parameters={"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
+        handler=mock_search,
+    ))
+
+    # Initialize orchestrator with DeterministicAdapter
+    adapter = DeterministicAdapter()
+    orchestrator = LLMOrchestrator(db_session, llm=adapter, tool_registry=registry)
+
+    # Handle message
+    res = await orchestrator.handle_message(
+        conversation_id=None,
+        message="Hello",
+        language="en",
+    )
+
+    assert res.conversation_id is not None
+    assert "hello" in res.reply.lower()
+
+    # Query message history
+    msgs = db_session.query(MessageV2).filter(MessageV2.conversation_id == res.conversation_id).all()
+    assert len(msgs) == 2
+    assert msgs[0].role == "user"
+    assert msgs[1].role == "assistant"
+
+
+def test_system_prompt_builder():
+    prompt = build_system_prompt(
+        language="kn",
+        investigation_context={"title": "Mysuru Case", "selected_firs": [1, 2]},
+    )
+    assert "Mysuru Case" in prompt
+    assert "ಕನ್ನಡ" in prompt  # Kannada directive present

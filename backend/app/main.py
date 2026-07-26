@@ -30,6 +30,8 @@ from backend.api.investigation_stream import stream_investigation, run_investiga
 from backend.api.sessions import router as sessions_router
 from backend.api.conversation import router as conversation_router
 from backend.api.conversation_chat import router as conversation_chat_router
+from backend.api.investigations_v2 import router as investigations_v2_router
+from backend.api.conversations_v2 import router as conversations_v2_router
 from backend.api.board import router as board_router
 from backend.api.voice import router as voice_router
 from backend.api.discussion import router as discussion_router
@@ -123,6 +125,10 @@ app.include_router(collaboration_router)
 # chat + voice + evidence + reporting behind one /conversation/* surface;
 # does not change or replace any router above.
 app.include_router(conversation_chat_router)
+
+# Conversation V2 — new, additive.
+app.include_router(investigations_v2_router)
+app.include_router(conversations_v2_router)
 
 # Stage G1 (Criminology-Based Offender Profiling Engine) — new, additive.
 # Deterministic per-person dossier (Requirement 5): read-only, computed

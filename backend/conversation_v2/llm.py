@@ -16,10 +16,151 @@ import os
 from abc import ABC, abstractmethod
 from typing import Any
 
-from backend.conversation.intent import ClassifiedIntent
-from backend.conversation.router import ConversationIntent, route
-from backend.conversation.tools import TOOL_SCHEMAS
+
+
+
 from backend.language.prompting import language_directive
+
+import enum
+import re
+
+class ConversationIntent(str, enum.Enum):
+    INVESTIGATE = "investigate"
+    SUMMARIZE = "summarize"
+    EXPORT_PDF = "export_pdf"
+    CLEAR_HISTORY = "clear_history"
+    GREETING = "greeting"
+    CHITCHAT = "chitchat"
+    FOLLOWUP = "followup"
+    CLARIFICATION_RESPONSE = "clarification_response"
+
+class ClassifiedIntent:
+    def __init__(self, intent: ConversationIntent, confidence: float = 1.0, extracted_entities: list = None, followup_target: str = None, matched_phrase: str = None):
+        self.intent = intent
+        self.confidence = confidence
+        self.extracted_entities = extracted_entities or []
+        self.followup_target = followup_target
+        self.matched_phrase = matched_phrase
+
+_SUMMARIZE_RE = re.compile(
+    r"\b(summari[sz]e (this|the|our)?\s*(conversation|session|investigation|so far)?|"
+    r"what('s| is| have we) (covered|discussed|found) so far|recap|catch me up)\b",
+    re.IGNORECASE,
+)
+
+_EXPORT_RE = re.compile(
+    r"\b(export (this|it|the report)?\s*(as|to)?\s*(a )?pdf|"
+    r"(give|generate|download|create) (me )?(a |the )?(pdf|report)|"
+    r"pdf (report|export))\b",
+    re.IGNORECASE,
+)
+
+_CLEAR_RE = re.compile(
+    r"\b(clear (this|the)?\s*(conversation|history|chat)|"
+    r"wipe (the )?(conversation|history)|delete (this )?(conversation|history))\b",
+    re.IGNORECASE,
+)
+
+_GREETING_RE = re.compile(
+    r"^\s*("
+    r"h(i|ello|ey|owdy)"
+    r"|good\s+(morning|afternoon|evening|day)"
+    r"|what'?s\s+up"
+    r"|how\s+are\s+you"
+    r"|how\s+do\s+you\s+do"
+    r"|yo\b"
+    r"|namaste"
+    r"|namaskar[a]?"
+    r")\s*[!.?]*\s*$",
+    re.IGNORECASE,
+)
+
+_CHITCHAT_RE = re.compile(
+    r"\b("
+    r"what can you do|what are you|who are you|help me"
+    r"|explain\s+(what|how|why)\b"
+    r"|explain\s+\w+"
+    r"|what\s+is\s+(a\s+)?(?!fir\b|case\b|investigation\b)\w+"
+    r"|tell\s+me\s+about\s+(yourself|sherlock)"
+    r"|thank\s*(you|s)"
+    r"|thanks"
+    r"|ok(ay)?\b"
+    r"|got\s+it"
+    r"|I\s+(see|understand)"
+    r"|no\s+(thanks|thank\s+you)"
+    r"|never\s*mind"
+    r"|cancel"
+    r"|bye"
+    r"|goodbye"
+    r")\b",
+    re.IGNORECASE,
+)
+
+_FOLLOWUP_RE = re.compile(
+    r"\b("
+    r"what\s+about\s+(him|her|them|that|this|it|the\s+\w+)"
+    r"|show\s+(me\s+)?(the\s+)?(second|third|first|fourth|fifth|next|other|another)\s+"
+    r"|compare\s+them"
+    r"|go\s+(deeper|further|on)"
+    r"|tell\s+me\s+more"
+    r"|more\s+(details?|info(rmation)?)"
+    r"|elaborate"
+    r"|expand\s+on\s+(that|this|it)"
+    r"|his\s+(brother|sister|wife|husband|father|mother|accomplice|associate)"
+    r"|their\s+(relationship|connection|association)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+def route(message: str) -> ClassifiedIntent:
+    text = (message or "").strip()
+    m = _CLEAR_RE.search(text)
+    if m:
+        return ClassifiedIntent(ConversationIntent.CLEAR_HISTORY, matched_phrase=m.group(0))
+    m = _EXPORT_RE.search(text)
+    if m:
+        return ClassifiedIntent(ConversationIntent.EXPORT_PDF, matched_phrase=m.group(0))
+    m = _SUMMARIZE_RE.search(text)
+    if m:
+        return ClassifiedIntent(ConversationIntent.SUMMARIZE, matched_phrase=m.group(0))
+    return ClassifiedIntent(ConversationIntent.INVESTIGATE, matched_phrase=None)
+
+def classify_intent(message: str, context_summary: str = None, has_pending_clarification: bool = False, has_context: bool = False) -> ClassifiedIntent:
+    text = (message or "").strip()
+    if has_pending_clarification:
+        return ClassifiedIntent(ConversationIntent.CLARIFICATION_RESPONSE)
+    
+    routed = route(text)
+    if routed.intent != ConversationIntent.INVESTIGATE:
+        return routed
+        
+    m = _GREETING_RE.match(text)
+    if m:
+        return ClassifiedIntent(ConversationIntent.GREETING, matched_phrase=m.group(0))
+        
+    m = _CHITCHAT_RE.search(text)
+    if m:
+        return ClassifiedIntent(ConversationIntent.CHITCHAT, matched_phrase=m.group(0))
+        
+    m = _FOLLOWUP_RE.search(text)
+    if m and has_context:
+        return ClassifiedIntent(ConversationIntent.FOLLOWUP, matched_phrase=m.group(0))
+        
+    return ClassifiedIntent(ConversationIntent.INVESTIGATE)
+
+def respond_to_greeting(message: str) -> str:
+    return "Hello! I'm SHERLOCK, your crime intelligence assistant. Ask me about cases, suspects, crime patterns, or anything investigative — I'm here to help."
+
+def respond_to_chitchat(message: str) -> str:
+    return "I am SHERLOCK, your AI crime intelligence assistant. I can help search suspects, analyze bank accounts, rebuild timelines, and generate predictive case forecasts."
+
+def _format_response_template(query: str, narrative: str, findings: list, language: str = "en") -> str:
+    if findings:
+        return f"Findings for query '{query}':\n" + "\n".join([f"- {f.get('title', 'Finding')}: {f.get('description', '')}" for f in findings])
+    return f"No direct findings found for query '{query}'."
+
+from backend.tools.tool_definitions import build_default_registry
+TOOL_SCHEMAS = build_default_registry().get_all_schemas()
 
 logger = logging.getLogger(__name__)
 
@@ -519,8 +660,8 @@ class DeterministicAdapter(ConversationLLM):
         language: str = "en"
     ) -> LLMResult:
         # Standard fallback rules (reuses regex classification logic)
-        from backend.conversation.intent import classify_intent
-        from backend.conversation.responder import respond_to_greeting, respond_to_chitchat
+        
+        
 
         classified = classify_intent(
             message,
@@ -562,7 +703,7 @@ class DeterministicAdapter(ConversationLLM):
         language: str = "en"
     ) -> str:
         # Reuses Stage F3 deterministic fallback formatter
-        from backend.conversation.responder import _format_response_template
+        
         # ChiefAgent.synthesis_node returns narrative="", so format_findings generates the layout
         return _format_response_template(query, "", findings, language=language)
 
@@ -600,8 +741,8 @@ class DeterministicAdapter(ConversationLLM):
             msg = msg_match.group(1).strip() if msg_match else ""
             
             # Simple fallback intent detection
-            from backend.conversation.intent import classify_intent
-            from backend.conversation.router import route
+            
+            
             
             # Use basic intent classifier
             classified = classify_intent(msg, has_context=True)

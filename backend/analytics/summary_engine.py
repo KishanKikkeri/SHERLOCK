@@ -232,7 +232,7 @@ def generate_dashboard_summary(session: Session, crime_type: Optional[str] = Non
     }
 
     # Generate executive summary using pluggable LLM (with deterministic template fallback)
-    from backend.conversation.llm import get_conversation_llm
+    from backend.conversation_v2.llm import get_conversation_llm
     try:
         llm = get_conversation_llm()
         executive_summary = llm.format_analytics(dashboard_data)

@@ -26,7 +26,7 @@ const InvestigationBoardPage = lazy(() =>
 const FindingsPage = lazy(() => import('@/findings/FindingsPage').then((m) => ({ default: m.FindingsPage })))
 const GraphPage = lazy(() => import('@/graph/GraphPage').then((m) => ({ default: m.GraphPage })))
 const ConversationPage = lazy(() =>
-  import('@/conversation/ConversationPage').then((m) => ({ default: m.ConversationPage })),
+  import('@/conversation/ConversationPageV2').then((m) => ({ default: m.ConversationPageV2 })),
 )
 const VoicePage = lazy(() => import('@/voice/VoicePage').then((m) => ({ default: m.VoicePage })))
 const HighRiskPersonsPage = lazy(() =>
