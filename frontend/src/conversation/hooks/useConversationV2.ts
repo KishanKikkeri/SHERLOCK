@@ -80,6 +80,7 @@ export function useConversationV2() {
 
       try {
         let finalReply = ''
+        let streamErrored = false
         await streamConversationMessageV2(
           conversationId,
           trimmed,
@@ -100,10 +101,50 @@ export function useConversationV2() {
                     : m
                 )
               })
+            } else if (event.event_type === 'error') {
+              // The backend's SSE generator sends this and then ends the
+              // stream normally (HTTP 200) — no exception is thrown here,
+              // so without this branch the error message only ever lived
+              // in the timeline, which unmounts the instant isStreaming
+              // goes false. That made real failures (LLM call erroring,
+              // timing out, etc.) look identical to "no reply at all",
+              // with the actual reason discarded before anyone could see
+              // it. Write it onto the visible message instead, same as
+              // the catch block below does for a hard JS/network failure.
+              streamErrored = true
+              const errMsg = event.message || 'The assistant hit an error before it could reply.'
+              queryClient.setQueryData<MessageV2[]>(messagesKey, (old) => {
+                if (!old) return []
+                return old.map((m) =>
+                  m.metadata.pending
+                    ? {
+                        ...m,
+                        content: errMsg,
+                        metadata: { ...m.metadata, pending: false, error: true },
+                      }
+                    : m
+                )
+              })
             }
           },
           controller.signal
         )
+        if (!finalReply && !streamErrored) {
+          // Stream ended (200 OK) without ever sending assistant_reply or
+          // error — leaving a permanently-empty pending bubble otherwise.
+          queryClient.setQueryData<MessageV2[]>(messagesKey, (old) => {
+            if (!old) return []
+            return old.map((m) =>
+              m.metadata.pending
+                ? {
+                    ...m,
+                    content: 'The assistant ended without sending a reply.',
+                    metadata: { ...m.metadata, pending: false, error: true },
+                  }
+                : m
+            )
+          })
+        }
       } catch (err) {
         console.error('Streaming error:', err)
         const errMsg = (err as any)?.detail || 'Failed to stream response.'
