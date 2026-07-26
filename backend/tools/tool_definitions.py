@@ -30,14 +30,9 @@ async def handle_investigate(ctx: ToolContext, *, query: str) -> dict:
     """Wraps the 20-agent LangGraph pipeline."""
     try:
         from backend.api.investigation_stream import run_investigation_once
-        try:
-            final_report = await run_investigation_once(
-                query, session_id=ctx.conversation_id, language=ctx.language
-            )
-        except Exception:
-            final_report = await run_investigation_once(
-                query, session_id=None, language=ctx.language
-            )
+        final_report = await run_investigation_once(
+            query, session_id=ctx.conversation_id, language=ctx.language
+        )
         return {
             "status": "success",
             "findings": final_report.get("findings") or [],
@@ -49,25 +44,13 @@ async def handle_investigate(ctx: ToolContext, *, query: str) -> dict:
         return {"status": "error", "message": str(e)}
 
 
-
 async def handle_search_graph(ctx: ToolContext, *, query: str) -> dict:
     """Search the entity graph for any identifier."""
-    import re
     from backend.database.config import SessionLocal
     from backend.graph.search import search_entities
     db = SessionLocal()
     try:
-        cleaned_query = query
-        for phrase in [
-            "search for suspect", "search for", "find accomplices of", "find accomplices",
-            "analyze the network around suspect", "analyze network around", "network around",
-            "identify vehicles linked to suspect", "generate a risk score for suspect",
-            "who are the top gang leaders in", "show me all high-risk suspects in", "show me high risk nodes in"
-        ]:
-            cleaned_query = re.sub(re.escape(phrase), "", cleaned_query, flags=re.IGNORECASE).strip()
-
-        target = cleaned_query if cleaned_query else query
-        results = search_entities(db, target, limit=10)
+        results = search_entities(db, query, limit=10)
         return {
             "status": "success",
             "results": [
@@ -86,7 +69,6 @@ async def handle_search_graph(ctx: ToolContext, *, query: str) -> dict:
         return {"status": "error", "message": str(e)}
     finally:
         db.close()
-
 
 
 async def handle_search_cases(ctx: ToolContext, *, search: str | None = None) -> dict:
@@ -334,40 +316,6 @@ async def handle_generate_pdf(ctx: ToolContext, *, session_id: int | None = None
             db.close()
 
 
-async def handle_get_analytics_summary(ctx: ToolContext) -> dict:
-    """Fetch compiled analytics dashboard metrics (hotspots, spikes, trends)."""
-    from backend.database.config import SessionLocal
-    from backend.analytics.summary_engine import generate_dashboard_summary
-    db = ctx.db if ctx.db is not None else SessionLocal()
-    try:
-        data = generate_dashboard_summary(db)
-        return {"status": "success", "results": [data]}
-    except Exception as e:
-        logger.exception("get_analytics_summary tool failed")
-        return {"status": "error", "message": str(e)}
-    finally:
-        if db is not ctx.db:
-            db.close()
-
-
-async def handle_get_forecast_dashboard(ctx: ToolContext) -> dict:
-    """Fetch predictive case forecasting metrics and district alerts."""
-    from backend.database.config import SessionLocal
-    from backend.forecasting.summary_engine import generate_forecast_dashboard
-    db = ctx.db if ctx.db is not None else SessionLocal()
-    try:
-        data = generate_forecast_dashboard(db)
-        return {"status": "success", "results": [data]}
-    except Exception as e:
-        logger.exception("get_forecast_dashboard tool failed")
-        return {"status": "error", "message": str(e)}
-    finally:
-        if db is not ctx.db:
-            db.close()
-
-
-
-
 # ---------------------------------------------------------------------------
 # Tool Schema Definitions
 # ---------------------------------------------------------------------------
@@ -451,18 +399,6 @@ TOOL_DEFINITIONS: list[ToolDefinition] = [
             "required": ["name"],
         },
         handler=handle_search_person,
-    ),
-    ToolDefinition(
-        name="get_analytics_summary",
-        description="Retrieve comprehensive crime pattern analytics, hotspots, and trend distributions.",
-        parameters={"type": "object", "properties": {}},
-        handler=handle_get_analytics_summary,
-    ),
-    ToolDefinition(
-        name="get_forecast_dashboard",
-        description="Retrieve predictive crime forecasts, repeat offender alerts, and seasonal risk spikes.",
-        parameters={"type": "object", "properties": {}},
-        handler=handle_get_forecast_dashboard,
     ),
     ToolDefinition(
         name="financial_analysis",
@@ -583,4 +519,3 @@ def build_default_registry() -> ToolRegistry:
         ", ".join(registry.list_names()),
     )
     return registry
-

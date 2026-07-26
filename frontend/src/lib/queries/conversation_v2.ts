@@ -291,10 +291,8 @@ export function useConversationMessagesV2(id: number | undefined) {
     queryKey: ['v2', 'conversations', id, 'messages'],
     queryFn: () => apiFetch<MessageV2[]>(`/v2/conversations/${id}/messages`),
     enabled: id !== undefined,
-    staleTime: 30 * 1000,
   })
 }
-
 
 export function useSendConversationMessageV2() {
   const queryClient = useQueryClient()
@@ -352,8 +350,7 @@ export async function streamConversationMessageV2(
   id: number,
   message: string,
   onEvent: (event: { event_type: string; message: string; agent: string; data: any }) => void,
-  signal?: AbortSignal,
-  language?: string
+  signal?: AbortSignal
 ): Promise<void> {
   const accessToken = useAuthStore.getState().accessToken
   const res = await fetch(`${API_BASE_URL}/v2/conversations/${id}/stream`, {
@@ -363,9 +360,8 @@ export async function streamConversationMessageV2(
       'Content-Type': 'application/json',
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     },
-    body: JSON.stringify({ message, language }),
+    body: JSON.stringify({ message }),
   })
-
   if (!res.ok || !res.body) {
     const detail = await res.json().catch(() => ({ detail: res.statusText }))
     throw { status: res.status, detail: detail.detail ?? res.statusText }
@@ -394,20 +390,4 @@ export async function streamConversationMessageV2(
       }
     }
   }
-
-  // Flush remaining buffer line if any
-  if (buffer.trim()) {
-    const trimmed = buffer.trim()
-    if (trimmed.startsWith('data:')) {
-      const jsonText = trimmed.slice('data:'.length).trim()
-      if (jsonText) {
-        try {
-          onEvent(JSON.parse(jsonText))
-        } catch {
-          // Skip
-        }
-      }
-    }
-  }
 }
-

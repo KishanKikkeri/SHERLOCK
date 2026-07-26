@@ -78,14 +78,11 @@ def _priority_or_400(value: str | None):
 
 
 def _serialize(row) -> dict:
-    fir_num = row.fir.fir_number if getattr(row, "fir", None) else (f"FIR-{row.fir_id}" if row.fir_id else None)
-    title = f"[FIR #{fir_num}] {row.title}" if fir_num and not row.title.startswith("[FIR #") else row.title
     return {
         "id": row.id,
         "session_code": row.session_code,
-        "title": title,
+        "title": row.title,
         "fir_id": row.fir_id,
-        "fir_number": fir_num,
         "status": row.status.value,
         "priority": row.priority.value,
         "opened_by_officer_id": row.opened_by_officer_id,
@@ -97,7 +94,6 @@ def _serialize(row) -> dict:
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
         "notes": row.notes,
     }
-
 
 
 def _serialize_v2_as_session(inv) -> dict:

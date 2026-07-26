@@ -56,8 +56,6 @@ class UpdateConversationRequest(BaseModel):
 
 class SendMessageRequest(BaseModel):
     message: str
-    language: Optional[str] = None
-
 
 
 def _serialize_conversation(row: ConversationV2) -> dict:
@@ -363,16 +361,11 @@ async def post_message(
         if not row or row.is_deleted:
             raise HTTPException(status_code=404, detail="Conversation not found.")
 
-        if payload.language and payload.language in ("en", "kn", "hi"):
-            row.language = payload.language
-            db.commit()
-
-        active_lang = payload.language or row.language or "en"
         orchestrator = LLMOrchestrator(db)
         result = await orchestrator.handle_message(
             conversation_id=id,
             message=payload.message,
-            language=active_lang,
+            language=row.language,
             investigation_id=row.investigation_id,
         )
 
@@ -409,17 +402,12 @@ async def post_stream(
     """Send a message to the conversation with SSE streaming."""
     db = SessionLocal()
     row = db.get(ConversationV2, id)
+    db.close()
 
     if not row or row.is_deleted:
-        db.close()
         raise HTTPException(status_code=404, detail="Conversation not found.")
 
-    if payload.language and payload.language in ("en", "kn", "hi"):
-        row.language = payload.language
-        db.commit()
 
-    active_lang = payload.language or row.language or "en"
-    db.close()
 
     async def event_generator():
         stream_db = SessionLocal()
@@ -428,7 +416,7 @@ async def post_stream(
             async for event in orchestrator.stream_message(
                 conversation_id=id,
                 message=payload.message,
-                language=active_lang,
+                language=row.language,
                 investigation_id=row.investigation_id,
             ):
                 payload_data = {
@@ -438,7 +426,6 @@ async def post_stream(
                     "data": event.data,
                 }
                 yield f"data: {json.dumps(payload_data)}\n\n"
-
         except Exception as e:
             logger.exception("Streaming event generation failed")
             error_payload = {

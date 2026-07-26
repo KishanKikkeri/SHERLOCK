@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
   Plus,
   Pin,
@@ -32,15 +32,8 @@ export function ConversationSidebarV2() {
   const deleteMutation = useDeleteConversationV2()
   const duplicateMutation = useDuplicateConversationV2()
 
-  useEffect(() => {
-    if (store.activeConversationId === undefined && conversations && conversations.length > 0) {
-      store.setConversationId(conversations[0].id)
-    }
-  }, [conversations, store.activeConversationId, store])
-
   const [renameId, setRenameId] = useState<number | null>(null)
   const [renameText, setRenameText] = useState('')
-
 
   async function handleNewChat() {
     const res = await createMutation.mutateAsync({

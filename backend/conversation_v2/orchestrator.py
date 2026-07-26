@@ -48,6 +48,51 @@ logger = logging.getLogger(__name__)
 # Maximum tool-call rounds before forcing a text response
 MAX_TOOL_ROUNDS = 5
 
+# Some agents (e.g. SociologicalIntelligence, WitnessIntelligence,
+# OrganizationIntelligence) attach every matching entity ID to a finding's
+# source_entities / supporting_graph / related_documents with no cap — for a
+# broad query this can mean hundreds of person IDs per finding, across up to
+# 16 agents. That produces tool-result payloads of several hundred KB to
+# multiple MB, which is fine over localhost but unreliable over a real
+# network (proxy/timeout limits) — the likely cause of messages that appear
+# to "vanish" with no reply once deployed. This caps list fields in-place
+# before the result is stored or streamed, without touching agent logic.
+_MAX_LIST_ITEMS = 8
+
+
+def _slim_findings_payload(tool_result: dict) -> dict:
+    def slim_finding(f: dict) -> dict:
+        if not isinstance(f, dict):
+            return f
+        out = dict(f)
+        for key in ("source_entities", "evidence", "related_documents"):
+            val = out.get(key)
+            if isinstance(val, list) and len(val) > _MAX_LIST_ITEMS:
+                out[key] = val[:_MAX_LIST_ITEMS] + [f"... +{len(val) - _MAX_LIST_ITEMS} more"]
+        sg = out.get("supporting_graph")
+        if isinstance(sg, dict):
+            out["supporting_graph"] = {
+                k: (v[:_MAX_LIST_ITEMS] + [f"... +{len(v) - _MAX_LIST_ITEMS} more"]
+                    if isinstance(v, list) and len(v) > _MAX_LIST_ITEMS else v)
+                for k, v in sg.items()
+            }
+        meta = out.get("metadata")
+        if isinstance(meta, dict):
+            out["metadata"] = {
+                k: (v[:_MAX_LIST_ITEMS] + [f"... +{len(v) - _MAX_LIST_ITEMS} more"]
+                    if isinstance(v, list) and len(v) > _MAX_LIST_ITEMS else v)
+                for k, v in meta.items()
+            }
+        return out
+
+    if not isinstance(tool_result, dict):
+        return tool_result
+    result = dict(tool_result)
+    for key in ("findings", "rejected_findings"):
+        if isinstance(result.get(key), list):
+            result[key] = [slim_finding(f) for f in result[key]]
+    return result
+
 
 @dataclass
 class AssistantResponse:
@@ -183,6 +228,8 @@ class LLMOrchestrator:
                     logger.exception("Tool %s failed", tool_name)
                     tool_result = {"status": "error", "message": str(e)}
 
+                tool_result = _slim_findings_payload(tool_result)
+
                 # Store the tool result
                 store_message(
                     self.db, conv.id, role="tool",
@@ -195,35 +242,20 @@ class LLMOrchestrator:
                 history = load_conversation_messages(self.db, conv.id)
 
                 # Format the tool results into a natural response
-                if "results" in tool_result and isinstance(tool_result["results"], list):
-                    findings_payload = tool_result["results"]
-                elif "findings" in tool_result and isinstance(tool_result["findings"], list):
-                    findings_payload = tool_result["findings"]
-                elif "data" in tool_result and isinstance(tool_result["data"], list):
-                    findings_payload = tool_result["data"]
-                elif "data" in tool_result and isinstance(tool_result["data"], dict):
-                    findings_payload = [tool_result["data"]]
-                else:
-                    findings_payload = [tool_result]
-
                 formatted = self.llm.format_findings(
                     message,
-                    findings_payload,
+                    tool_result.get("findings", [tool_result]),
                     {"system_prompt": system_prompt},
                     language=language,
                 )
 
-
                 # Store final assistant reply
                 metadata = {}
-                raw_findings = tool_result.get("findings") or tool_result.get("results") or []
-                if isinstance(raw_findings, list) and raw_findings:
+                if tool_result.get("findings"):
                     metadata["citations"] = [
-                        {"source": f.get("source", "DB"), "text": f.get("title") or f.get("fir_number") or f.get("label") or "Finding"}
-                        for f in raw_findings[:5]
-                        if isinstance(f, dict)
+                        {"source": f.get("source", ""), "text": f.get("title", "")}
+                        for f in tool_result["findings"][:5]
                     ]
-
 
                 store_message(
                     self.db, conv.id, role="assistant",
@@ -342,7 +374,7 @@ class LLMOrchestrator:
             store_message(
                 self.db, conv.id, role="tool",
                 tool_name=tool_name,
-                tool_result_json=json.dumps(tool_result),
+                tool_result_json=json.dumps(_slim_findings_payload(tool_result)),
                 tool_call_id=call_id,
             )
 
@@ -354,25 +386,12 @@ class LLMOrchestrator:
             )
 
             # Format and return
-            if "results" in tool_result and isinstance(tool_result["results"], list):
-                findings_payload = tool_result["results"]
-            elif "findings" in tool_result and isinstance(tool_result["findings"], list):
-                findings_payload = tool_result["findings"]
-            elif "data" in tool_result and isinstance(tool_result["data"], list):
-                findings_payload = tool_result["data"]
-            elif "data" in tool_result and isinstance(tool_result["data"], dict):
-                findings_payload = [tool_result["data"]]
-            else:
-                findings_payload = [tool_result]
-
             formatted = self.llm.format_findings(
                 message,
-                findings_payload,
+                tool_result.get("findings", [tool_result]),
                 {"system_prompt": system_prompt},
                 language=language,
             )
-
-
 
             store_message(self.db, conv.id, role="assistant", content=formatted)
 

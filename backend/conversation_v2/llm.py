@@ -75,21 +75,12 @@ _GREETING_RE = re.compile(
     re.IGNORECASE,
 )
 
-_DOMAIN_QUERY_RE = re.compile(
-    r"\b("
-    r"fir|firs|case|cases|suspect|suspects|offender|offenders|crime|crimes|criminal|police|station|district|"
-    r"investigat(e|ion|ing|or)|hotspot|hotspots|cluster|clusters|forecast|forecasts|trend|trends|analytics|spikes?|"
-    r"gang|accomplice|accomplices|bank|account|transaction|evidence|witness|victim|ipc|incident|incidents|"
-    r"cyber|theft|robbery|burglary|assault|murder|extortion|firearm|weapons?|money|laundering|nodes?|risk|report|"
-    r"bengaluru|mysuru|hubballi|karnataka|mangaluru|belagavi|davangere|tumakuru"
-    r")\b",
-    re.IGNORECASE,
-)
-
-
 _CHITCHAT_RE = re.compile(
     r"\b("
     r"what can you do|what are you|who are you|help me"
+    r"|explain\s+(what|how|why)\b"
+    r"|explain\s+\w+"
+    r"|what\s+is\s+(a\s+)?(?!fir\b|case\b|investigation\b)\w+"
     r"|tell\s+me\s+about\s+(yourself|sherlock)"
     r"|thank\s*(you|s)"
     r"|thanks"
@@ -146,20 +137,6 @@ def classify_intent(message: str, context_summary: str = None, has_pending_clari
     m = _GREETING_RE.match(text)
     if m:
         return ClassifiedIntent(ConversationIntent.GREETING, matched_phrase=m.group(0))
-
-    # General chitchat & informational QA phrases take precedence if text is a common informational query
-    text_lower = text.lower()
-    if any(p in text_lower for p in [
-        "what is an fir", "role of an fir", "ipc stand for", "how do police investigations work",
-        "data analytics help reduce crime", "history of bengaluru", "distance between bengaluru",
-        "who created you", "what is your name", "tell me a short joke", "tell me a joke",
-        "how does artificial intelligence work", "difference between python and javascript",
-        "keep my password secure", "poem about justice", "famous land marks in karnataka"
-    ]):
-        return ClassifiedIntent(ConversationIntent.CHITCHAT)
-
-    if _DOMAIN_QUERY_RE.search(text):
-        return ClassifiedIntent(ConversationIntent.INVESTIGATE)
         
     m = _CHITCHAT_RE.search(text)
     if m:
@@ -168,190 +145,21 @@ def classify_intent(message: str, context_summary: str = None, has_pending_clari
     m = _FOLLOWUP_RE.search(text)
     if m and has_context:
         return ClassifiedIntent(ConversationIntent.FOLLOWUP, matched_phrase=m.group(0))
-
-    # General non-domain queries (math, science, common knowledge, chit-chat)
-    return ClassifiedIntent(ConversationIntent.CHITCHAT)
+        
+    return ClassifiedIntent(ConversationIntent.INVESTIGATE)
 
 def respond_to_greeting(message: str) -> str:
     return "Hello! I'm SHERLOCK, your crime intelligence assistant. Ask me about cases, suspects, crime patterns, or anything investigative — I'm here to help."
 
 def respond_to_chitchat(message: str) -> str:
-    text = (message or "").strip().lower()
-    
-    # 1. Math / Arithmetic evaluation
-    math_match = re.search(r"(\d+)\s*([\+\-\*/]|divided by|times|plus|minus)\s*(\d+)", text)
-    if math_match:
-        try:
-            n1 = float(math_match.group(1))
-            op = math_match.group(2).strip()
-            n2 = float(math_match.group(3))
-            res = None
-            if op in ("*", "times"):
-                res = n1 * n2
-            elif op in ("/", "divided by"):
-                res = n1 / n2 if n2 != 0 else "undefined (division by zero)"
-            elif op in ("+", "plus"):
-                res = n1 + n2
-            elif op in ("-", "minus"):
-                res = n1 - n2
-            if res is not None:
-                res_str = int(res) if isinstance(res, float) and res.is_integer() else str(res)
-                return f"{math_match.group(1)} {op} {math_match.group(3)} = {res_str}"
-        except Exception:
-            pass
-
-    # 2. Identity, System & General QA Dictionary
-    if "who created you" in text:
-        return "I was created by the SHERLOCK engineering team to assist the Karnataka State Police."
-    if "what is your name" in text or "your name" in text:
-        return "My name is SHERLOCK, your AI crime intelligence assistant."
-    if "capital of france" in text:
-        return "The capital of France is Paris."
-    if "albert einstein" in text or "einstein" in text:
-        return "Albert Einstein (1879–1955) was a world-renowned theoretical physicist best known for developing the Theory of Relativity (E = mc²) and pioneering quantum mechanics."
-    if "machine learning" in text:
-        return "Machine learning is a branch of artificial intelligence focused on building systems that learn from data, identify patterns, and make decisions with minimal human intervention."
-    if "artificial intelligence" in text or "ai work" in text:
-        return "Artificial intelligence works by analyzing large datasets using mathematical algorithms, learning recurring patterns, and making predictions or decisions automatically."
-    if "graph database" in text:
-        return "A graph database stores data in nodes and relationships (edges), making it ideal for mapping complex networks such as suspect links, financial transactions, and communication trees."
-    if "bengaluru and mysuru" in text or "distance between" in text:
-        return "The road distance between Bengaluru and Mysuru is approximately 143 kilometers via the Bengaluru–Mysuru Expressway, taking about 2 hours by car."
-    if "history of bengaluru" in text:
-        return "Bengaluru was founded in 1537 by Kempe Gowda I, a chieftain under the Vijayanagara Empire. It evolved through the rule of Hyder Ali and Tipu Sultan into India's primary technology and research hub."
-    if "role of an fir" in text or "what is an fir" in text:
-        return "A First Information Report (FIR) is a formal document registered by police upon receiving information about a cognizable offense, initiating the legal criminal investigation process."
-    if "ipc stand for" in text:
-        return "IPC stands for the Indian Penal Code, the historic criminal code of India (established in 1860). As of July 2024, it has been replaced by the Bharatiya Nyaya Sanhita (BNS)."
-    if "how do police investigations work" in text:
-        return "Police investigations involve gathering physical evidence, recording witness statements, tracing digital footprints, mapping crime scenes, and presenting findings in court via a chargesheet."
-    if "data analytics help reduce crime" in text or "reduce crime" in text:
-        return "Data analytics helps law enforcement predict crime hotspots, identify repeat offender patterns, analyze syndicate connections, and allocate patrol resources proactively."
-    if "python and javascript" in text:
-        return "Python is a versatile, highly readable language popular in data science, AI, and backend systems. JavaScript is the primary language of the web, powering frontend UI and Node.js backends."
-    if "password secure" in text:
-        return "To keep passwords secure: use long unique passwords for every account, enable Multi-Factor Authentication (MFA), and use a reputable password manager."
-    if "poem about justice" in text:
-        return "Balance held with steady hand,\nTruth prevailing across the land.\nWhere darkness falls and shadows creep,\nJustice keeps its vigil deep."
-    if "famous land marks in karnataka" in text or "landmarks in karnataka" in text:
-        return "Famous landmarks in Karnataka include Mysore Palace, Hampi ruins, Gol Gumbaz in Vijayapura, Bandipur National Park, Jog Falls, and the Vidhana Soudha in Bengaluru."
-
-    # 3. System capabilities
-    if any(k in text for k in ["what can you do", "who are you", "what are you", "help me"]):
-        return "I am SHERLOCK, an AI crime intelligence assistant for the Karnataka State Police. I can help search FIRs & case files, trace suspect networks, analyze financial transactions, generate crime pattern forecasts, and export executive investigation reports."
-
-    # 4. Courteous / conversational phrasing
-    if any(k in text for k in ["thank you", "thanks"]):
-        return "You're very welcome! Let me know if you need any further investigative assistance."
-    if any(k in text for k in ["ok", "okay", "got it", "i see"]):
-        return "Understood. Feel free to ask if you have more questions or need specific case searches."
-    if any(k in text for k in ["never mind", "cancel"]):
-        return "No problem. Let me know whenever you'd like to resume analysis."
-    if any(k in text for k in ["bye", "goodbye"]):
-        return "Goodbye! Stay safe and feel free to return whenever you need investigative support."
-    if any(k in text for k in ["how are you", "how's it going"]):
-        return "I'm operating at peak efficiency! How can I assist with your investigation today?"
-    if "joke" in text:
-        return "Why did the computer keep its door locked? Because it didn't want any bytes coming in!"
-
-    # 5. Default natural fallback for open-ended conversation
-    return f"I understand. As your crime intelligence assistant, I can help analyze cases, look up suspects, or answer general questions. Let me know what you'd like to explore!"
-
+    return "I am SHERLOCK, your AI crime intelligence assistant. I can help search suspects, analyze bank accounts, rebuild timelines, and generate predictive case forecasts."
 
 def _format_response_template(query: str, narrative: str, findings: list, language: str = "en") -> str:
-    if not findings:
-        return f"No active records or findings matching '{query}' were found in the current database. You can refine your search by specifying FIR numbers, suspect names, or locations."
-    
-    # Unwrap dict wrapper if findings is wrapped in a dict with results/findings
-    if isinstance(findings, dict):
-        findings = findings.get("results") or findings.get("findings") or findings.get("data") or [findings]
-
-    if not isinstance(findings, list) or len(findings) == 0:
-        return f"No active records or findings matching '{query}' were found in the database."
-
-    first = findings[0] if len(findings) > 0 else {}
-
-    # Check for tool error object
-    if isinstance(first, dict) and first.get("status") == "error":
-        return f"Database query for '{query}' encountered an issue: {first.get('message', 'No details available')}. Please try broadening your search terms."
-
-    # 1. Case records (FIRs)
-
-    if isinstance(first, dict) and "fir_number" in first:
-        lines = [f"Found {len(findings)} matching case record(s) for '{query}':"]
-        for f in findings[:8]:
-            fir = f.get("fir_number", "Unknown")
-            ctype = f.get("crime_type") or "Crime Record"
-            dist = f.get("district") or "Karnataka"
-            st = f.get("status") or "ACTIVE"
-            lines.append(f"- **FIR #{fir}**: {ctype} in {dist} (Status: {st})")
-        return "\n".join(lines)
-        
-    # 2. Graph search entities (Person, Vehicle, Location, Phone, etc.)
-    if isinstance(first, dict) and ("kind" in first or "label" in first or "rank" in first):
-        lines = [f"Found {len(findings)} matching entity record(s) for '{query}':"]
-        for f in findings[:8]:
-            lbl = f.get("label") or f.get("name") or "Entity"
-            kind = f.get("kind") or "Node"
-            eid = f.get("id", "")
-            rank = f.get("rank")
-            rank_str = f" | Rank: {rank}" if rank is not None else ""
-            lines.append(f"- **{lbl}** ({kind}) [ID: {eid}]{rank_str}")
-        return "\n".join(lines)
-
-    # 3. Offender Profile / Person Details
-    if isinstance(first, dict) and ("name" in first or "person_id" in first):
-        name = first.get("name") or f"Person #{first.get('person_id')}"
-        age = first.get("age", "N/A")
-        gender = first.get("gender", "N/A")
-        risk = first.get("risk_score", "N/A")
-        crimes = first.get("total_crimes") or first.get("crime_count", 0)
-        return (
-            f"**Offender Dossier for {name}**:\n"
-            f"- **Age / Gender**: {age} / {gender}\n"
-            f"- **Assessed Risk Score**: {risk}\n"
-            f"- **Total Linked Offenses**: {crimes}\n"
-            f"- **Status**: Active in database system."
+    if findings:
+        return f"Findings for query '{query}':\n" + "\n".join(
+            [f"- {f.get('agent_name', 'Finding')}: {f.get('summary', '')}" for f in findings]
         )
-
-    # 4. Analytics / Forecasting Dashboard Dict
-    if isinstance(first, dict) and ("charts" in first or "tables" in first or "district_alerts" in first):
-        if "charts" in first or "tables" in first:
-            return (
-                f"**Executive Analytics Summary for '{query}'**:\n"
-                f"- **Data Analyzed**: Overall regional crime distribution & hotspot clusters\n"
-                f"- **Top Hotspot District**: Bengaluru Urban & Mysuru\n"
-                f"- **Primary Offense Spikes**: Property theft and cyber fraud\n"
-                f"- **Action Recommended**: Increase patrol coverage around high-density transit hubs."
-            )
-        if "district_alerts" in first or "forecast_charts" in first:
-            return (
-                f"**Predictive Case Forecasting Report for '{query}'**:\n"
-                f"- **Forecast Model**: Time-series ARIMA & Repeat Alert Engine\n"
-                f"- **High-Risk Districts**: Mysuru, Bengaluru, Hubballi\n"
-                f"- **Trend Forecast**: Theft & burglary offenses predicted to peak over next 30 days\n"
-                f"- **Preventive Action**: Deploy night patrol shifts and monitor repeat offender movement."
-            )
-
-    # 5. Standard findings list
-    formatted_items = []
-    for f in findings[:10]:
-        if isinstance(f, dict):
-            title = f.get("title") or f.get("name") or f.get("label") or "Finding"
-            desc = f.get("description") or f.get("summary") or f.get("text") or ""
-            if desc:
-                formatted_items.append(f"- **{title}**: {desc}")
-            else:
-                formatted_items.append(f"- **{title}**")
-        elif isinstance(f, str) and f.strip():
-            formatted_items.append(f"- {f.strip()}")
-            
-    if formatted_items:
-        return f"Findings for query '{query}':\n" + "\n".join(formatted_items)
-
-    return f"Synthesized findings for '{query}': {json.dumps(findings[:3])}"
-
-
+    return f"No direct findings found for query '{query}'."
 
 from backend.tools.tool_definitions import build_default_registry
 TOOL_SCHEMAS = build_default_registry().get_all_schemas()
@@ -868,59 +676,26 @@ class DeterministicAdapter(ConversationLLM):
             return LLMResult(reply=respond_to_greeting(message), intent=classified.intent)
         elif classified.intent == ConversationIntent.CHITCHAT:
             return LLMResult(reply=respond_to_chitchat(message), intent=classified.intent)
-        elif classified.intent == ConversationIntent.SUMMARIZE:
-            summary_reply = "Here is a recap of our conversation so far:\n"
-            user_msgs = [h.get("text") or h.get("content", "") for h in history if h.get("role") == "user" and (h.get("text") or h.get("content"))]
-            if user_msgs:
-                summary_reply += "Key topics discussed:\n" + "\n".join([f"- {m}" for m in user_msgs[-5:]])
-            else:
-                summary_reply += "We have just initiated this session. Feel free to ask about cases, suspects, or crime trends."
-            return LLMResult(reply=summary_reply, intent=classified.intent)
-        elif classified.intent == ConversationIntent.EXPORT_PDF:
-            return LLMResult(reply="I have initiated the PDF report export for this conversation thread. You can download the completed report directly.", intent=classified.intent)
-        elif classified.intent == ConversationIntent.CLEAR_HISTORY:
-            return LLMResult(reply="Conversation history cleared. Ready for your next investigation query.", intent=classified.intent)
         elif classified.intent == ConversationIntent.FOLLOWUP:
+            # Let the tool registry handle follow-up by calling search_graph or investigate
             return LLMResult(
                 tool_call={"name": "search_graph", "arguments": {"query": message}},
                 intent=ConversationIntent.INVESTIGATE
             )
         elif classified.intent == ConversationIntent.CLARIFICATION_RESPONSE:
+            # Reuses clarification resolution
             return LLMResult(
                 tool_call={"name": "search_graph", "arguments": {"query": message}},
                 intent=ConversationIntent.INVESTIGATE
             )
-
-        # Smart domain query tool routing
-        msg_lower = message.lower()
-        if any(w in msg_lower for w in ["fir", "case", "cases", "status of fir", "incident", "incidents", "evidence"]):
-            return LLMResult(
-                tool_call={"name": "search_cases", "arguments": {"search": message}},
-                intent=ConversationIntent.INVESTIGATE
-            )
-        elif any(w in msg_lower for w in ["suspect", "person", "accomplice", "accomplices", "gang", "network", "node", "nodes", "link", "links", "ramesh", "suresh", "vikram", "nagaraj"]):
-            return LLMResult(
-                tool_call={"name": "search_graph", "arguments": {"query": message}},
-                intent=ConversationIntent.INVESTIGATE
-            )
-        elif any(w in msg_lower for w in ["forecast", "predict", "next month", "future"]):
-            return LLMResult(
-                tool_call={"name": "get_forecast_dashboard", "arguments": {}},
-                intent=ConversationIntent.INVESTIGATE
-            )
-        elif any(w in msg_lower for w in ["analytics", "hotspot", "hotspots", "spikes", "trend", "trends", "distribution", "summary"]):
-            return LLMResult(
-                tool_call={"name": "get_analytics_summary", "arguments": {}},
-                intent=ConversationIntent.INVESTIGATE
-            )
+        elif classified.intent in (ConversationIntent.SUMMARIZE, ConversationIntent.EXPORT_PDF, ConversationIntent.CLEAR_HISTORY):
+            return LLMResult(reply=None, tool_call=None, intent=classified.intent)
 
         # Default: call investigate tool
         return LLMResult(
             tool_call={"name": "investigate", "arguments": {"query": message}},
             intent=ConversationIntent.INVESTIGATE
         )
-
-
 
     def format_findings(
         self,
