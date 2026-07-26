@@ -263,8 +263,8 @@ async def handle_generate_pdf(ctx: ToolContext, *, session_id: int | None = None
     """Export investigation report as PDF."""
     from backend.database.config import SessionLocal
     from backend.database.models.conversation_v2 import ConversationV2, MessageV2
-    from backend.reporting.pdf_export import generate_investigation_pdf
-    db = SessionLocal()
+    from backend.reporting.pdf_export import generate_investigation_pdf, pdf_export_warnings
+    db = ctx.db if ctx.db is not None else SessionLocal()
     try:
         sid = session_id or ctx.conversation_id
         if not sid:
@@ -286,27 +286,34 @@ async def handle_generate_pdf(ctx: ToolContext, *, session_id: int | None = None
                 findings.append({
                     "title": f"Response {m.created_at.strftime('%Y-%m-%d %H:%M')}",
                     "description": m.content,
+                    "finding_type": f"Response {m.created_at.strftime('%Y-%m-%d %H:%M')}",
+                    "summary": m.content,
                     "confidence": 1.0,
                     "evidence_refs": [],
                 })
+        final_report = {
+            "query": f"Conversation V2 Export — '{row.nickname}'",
+            "narrative": "This document contains the archived discussion and evidence records from the conversation.",
+            "findings": findings,
+            "rejected_findings": [],
+            "evidence_log": [],
+        }
         pdf_bytes = generate_investigation_pdf(
-            query=f"Conversation V2 Export — '{row.nickname}'",
-            narrative="This document contains the archived discussion and evidence records from the conversation.",
-            findings=findings,
-            rejected_findings=[],
-            evidence_log=[],
+            final_report=final_report,
             language=row.language,
         )
+        warnings = pdf_export_warnings(final_report, row.language)
         return {
             "status": "success",
             "pdf_length": len(pdf_bytes) if pdf_bytes else 0,
-            "warnings": [],
+            "warnings": warnings,
         }
     except Exception as e:
         logger.exception("generate_pdf tool failed")
         return {"status": "error", "message": str(e)}
     finally:
-        db.close()
+        if db is not ctx.db:
+            db.close()
 
 
 # ---------------------------------------------------------------------------

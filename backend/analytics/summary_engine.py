@@ -22,12 +22,15 @@ set, not a tuned policy engine.
 
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
 from backend.analytics import trend_engine, hotspot_engine, cluster_engine, seasonal_engine, modus_engine
 from backend.analytics.trend_engine import VictimFilter
+
+logger = logging.getLogger(__name__)
 
 
 def _kpi_cards(trend: dict, yoy: dict, top_districts: list[dict], spikes: list[dict],

@@ -84,3 +84,33 @@ def test_pdf_export_with_minimal_report(api_client):
     if resp.status_code == 200:
         assert resp.headers["content-type"] == "application/pdf"
         assert resp.content[:4] == b"%PDF"
+
+
+def test_conversation_pdf_export(api_client, db_session):
+    from backend.database.models.conversation_v2 import ConversationV2, MessageV2
+
+    # 1. Create a conversation in the DB
+    conv = ConversationV2(
+        nickname="API Test Chat",
+        language="en",
+    )
+    db_session.add(conv)
+    db_session.commit()
+    db_session.refresh(conv)
+
+    # 2. Add assistant message so findings list is populated
+    msg = MessageV2(
+        conversation_id=conv.id,
+        role="assistant",
+        content="This is a test finding message.",
+    )
+    db_session.add(msg)
+    db_session.commit()
+
+    # 3. Call the PDF export endpoint
+    resp = api_client.post(f"/v2/conversations/{conv.id}/export/pdf")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert resp.content[:4] == b"%PDF"
+

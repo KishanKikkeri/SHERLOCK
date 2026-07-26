@@ -145,3 +145,35 @@ def test_system_prompt_builder():
     )
     assert "Mysuru Case" in prompt
     assert "ಕನ್ನಡ" in prompt  # Kannada directive present
+
+
+@pytest.mark.anyio
+async def test_generate_pdf_tool(db_session):
+    from backend.tools.tool_definitions import build_default_registry
+    
+    # 1. Create a conversation in the DB
+    conv = ConversationV2(
+        nickname="Tool Test Chat",
+        language="en",
+    )
+    db_session.add(conv)
+    db_session.commit()
+    db_session.refresh(conv)
+
+    # 2. Add assistant message so findings list is populated
+    msg = MessageV2(
+        conversation_id=conv.id,
+        role="assistant",
+        content="This is a test tool finding message.",
+    )
+    db_session.add(msg)
+    db_session.commit()
+
+    registry = build_default_registry()
+    ctx = ToolContext(db=db_session, conversation_id=conv.id)
+    res = await registry.execute("generate_pdf", {"session_id": conv.id}, ctx)
+    print("TOOL RESPONSE:", res)
+    assert res["status"] == "success"
+    assert res["pdf_length"] > 0
+    assert "warnings" in res
+

@@ -462,7 +462,7 @@ def export_pdf(
         # Build PDF from simple text flow
         # In a real environment, we'd use reportlab or reuse generate_investigation_pdf.
         # Let's import from backend.reporting.pdf_export
-        from backend.reporting.pdf_export import generate_investigation_pdf
+        from backend.reporting.pdf_export import generate_investigation_pdf, pdf_export_warnings
 
         # Compile simple findings mock to make PDF export compatible
         # findings = [{'title': '...', 'description': '...'}]
@@ -472,16 +472,22 @@ def export_pdf(
                 findings.append({
                     "title": f"Response {m.created_at.strftime('%Y-%m-%d %H:%M')}",
                     "description": m.content,
+                    "finding_type": f"Response {m.created_at.strftime('%Y-%m-%d %H:%M')}",
+                    "summary": m.content,
                     "confidence": 1.0,
                     "evidence_refs": [],
                 })
 
+        final_report = {
+            "query": f"Conversation V2 Export — '{row.nickname}'",
+            "narrative": "This document contains the archived discussion and evidence records from the conversation.",
+            "findings": findings,
+            "rejected_findings": [],
+            "evidence_log": [],
+        }
+
         pdf_bytes = generate_investigation_pdf(
-            query=f"Conversation V2 Export — '{row.nickname}'",
-            narrative="This document contains the archived discussion and evidence records from the conversation.",
-            findings=findings,
-            rejected_findings=[],
-            evidence_log=[],
+            final_report=final_report,
             language=row.language,
         )
 
@@ -497,6 +503,9 @@ def export_pdf(
             "Content-Disposition": f'attachment; filename="SHERLOCK-chat-{id}.pdf"',
             "Content-Length": str(len(pdf_bytes)),
         }
+        warnings = pdf_export_warnings(final_report, row.language)
+        if warnings:
+            headers["X-PDF-Warnings"] = " | ".join(warnings)
         return FastAPIResponse(content=pdf_bytes, media_type="application/pdf", headers=headers)
     except HTTPException:
         raise
